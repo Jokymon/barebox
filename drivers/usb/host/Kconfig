@@ -1,0 +1,14 @@
+config USB_EHCI
+	bool "EHCI driver"
+
+config USB_EHCI_OMAP
+	depends on ARCH_OMAP3
+	depends on USB_TWL4030
+	bool "OMAP EHCI driver"
+
+config USB_OHCI
+	bool "OHCI driver"
+
+config USB_OHCI_AT91
+	depends on ARCH_AT91
+	bool "AT91 OHCI driver"
