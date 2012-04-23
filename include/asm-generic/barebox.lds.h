@@ -23,7 +23,7 @@
 
 #define BAREBOX_CMDS	KEEP(*(SORT_BY_NAME(.barebox_cmd*)))
 
-#define BAREBOX_SYMS	KEEP(*(__usymtab))
+#define BAREBOX_SYMS	KEEP(*(__usymtab*))
 
 #define BAREBOX_MAGICVARS	KEEP(*(SORT_BY_NAME(.barebox_magicvar*)))
 
@@ -37,7 +37,7 @@ CONFIG_ARCH_BAREBOX_MAX_BARE_INIT_SIZE < CONFIG_BAREBOX_MAX_BARE_INIT_SIZE
 #include <linux/stringify.h>
 /* use 2 ASSERT because ld can not accept '"size" "10"' format */
 #define BAREBOX_BARE_INIT_SIZE					\
-	_barebox_bare_init_size = __bare_init_end - _text;	\
+	_barebox_bare_init_size = __bare_init_end - _stext;	\
 	ASSERT(_barebox_bare_init_size < MAX_BARE_INIT_SIZE, "Barebox bare_init size > ") \
 	ASSERT(_barebox_bare_init_size < MAX_BARE_INIT_SIZE, __stringify(MAX_BARE_INIT_SIZE)) \
 
