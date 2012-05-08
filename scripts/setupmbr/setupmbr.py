@@ -20,6 +20,16 @@ CHS_END_OFFSET         = 5
 PARTITION_START_OFFSET = 8
 PARTITION_SIZE_OFFSET  = 12
 
+def populate_globals_from_header(header_file):
+    f = open(header_file, "r")
+    for line in f.readlines():
+        line = line.strip()
+        if line.startswith("#define"):
+            (variable, value) = line[len("#define"):].strip().split(" ")
+            globals()[variable] = eval(value)
+
+populate_globals_from_header("arch/x86/mach-i386/include/mach/barebox.lds.h")
+
 class Field:
     def __init__(self, start, size):
         self.start = start
@@ -35,6 +45,19 @@ class Field:
 
     def __set__(self, instance, value):
         print("Setting not yet implemented")
+
+class DAPS:
+    def __init__(self, array, start_offset):
+        self.array = array
+        self.start_offset = start_offset
+
+    size = Field(0, 1)
+    res1 = Field(1, 1)
+    count = Field(2, 1)
+    res2 = Field(3, 1)
+    offset = Field(4, 2)
+    segment = Field(6, 2)
+    lba = Field(8, 4)
 
 class Partition:
     def __init__(self, array, start_offset):
@@ -86,6 +109,11 @@ def check_for_space(hd_image, size):
         return False
     return True
 
+def fill_daps(sector, count, offset, segment, lba):
+    assert count < 128
+    assert offset < 0x10000
+    assert segment < 0x10000
+
 def store_pers_env_info(patch_area, pers_sector_start, pers_sector_count):
     pass
 
@@ -100,6 +128,22 @@ def barebox_overlay_mbr(fd_barebox, fd_hd, pers_sector_count):
     hd_image = mmap.mmap(fd_hd.fileno(), required_size, access=mmap.ACCESS_WRITE)
 
     check_for_space(hd_image, required_size)
+
+    # embed barebox's boot code into the disk driver image
+    hd_image[0:OFFSET_OF_PARTITION_TABLE] = barebox_image[0:OFFSET_OF_PARTITION_TABLE]
+
+	# embed the barebox main image into the disk drive image,
+	# but keep the persistant environment storage untouched
+	# (if defined), e.g. store the main image behind this special area.
+    hd_image_start = (pers_sector_count+1) * SECTOR_SIZE
+    barebox_image_start = SECTOR_SIZE
+    size = sb.st_size - SECTOR_SIZE
+    hd_image[hd_image_start:hd_image_start+size] = barebox_image[barebox_image_start:barebox_image_start+size]
+
+    embed = PATCH_AREA
+    indirect = (pers_sector_count + 1) * SECTOR_SIZE
+
+    fill_daps(DAPS(hd_image, embed), 1, INDIRECT_AREA, INDIRECT_SEGMENT, 1 + pers_sector_count)
 
     hd_image.close()
     barebox_image.close()
