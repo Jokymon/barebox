@@ -61,6 +61,9 @@ struct menu {
 
 	int nb_entries;
 	int width;
+	char *display_buffer;
+	int display_buffer_size;
+
 	struct menu_entry *selected;
 	void *priv;
 };
@@ -76,6 +79,7 @@ static inline struct menu* menu_alloc(void)
 	if (m) {
 		INIT_LIST_HEAD(&m->entries);
 		m->nb_entries = 0;
+		m->auto_select = -1;
 	}
 	return m;
 }

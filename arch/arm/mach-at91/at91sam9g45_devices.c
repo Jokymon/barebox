@@ -46,8 +46,8 @@ void __init at91_add_device_usbh_ohci(struct at91_usbh_data *data)
 			at91_set_gpio_output(data->vbus_pin[i], 0);
 	}
 
-	add_generic_device("at91_ohci", -1, NULL, AT91SAM9G45_OHCI_BASE, 1024 * 1024,
-			   IORESOURCE_MEM, data);
+	add_generic_device("at91_ohci", DEVICE_ID_DYNAMIC, NULL, AT91SAM9G45_OHCI_BASE,
+			1024 * 1024, IORESOURCE_MEM, data);
 }
 #else
 void __init at91_add_device_usbh_ohci(struct at91_usbh_data *data) {}
@@ -125,7 +125,7 @@ void at91_add_device_nand(struct atmel_nand_data *data)
 	if (data->det_pin)
 		at91_set_gpio_input(data->det_pin, 1);
 
-	add_generic_device_res("atmel_nand", -1, nand_resources,
+	add_generic_device_res("atmel_nand", DEVICE_ID_DYNAMIC, nand_resources,
 			       ARRAY_SIZE(nand_resources), data);
 }
 #else
@@ -190,27 +190,22 @@ struct device_d * __init at91_register_uart(unsigned id, unsigned pins)
 		case 0:		/* DBGU */
 			configure_dbgu_pins();
 			start = AT91_BASE_SYS + AT91_DBGU;
-			id = 0;
 			break;
-		case AT91SAM9G45_ID_US0:
+		case 1:
 			configure_usart0_pins(pins);
 			start = AT91SAM9G45_BASE_US0;
-			id = 1;
 			break;
-		case AT91SAM9G45_ID_US1:
+		case 2:
 			configure_usart1_pins(pins);
 			start = AT91SAM9G45_BASE_US1;
-			id = 2;
 			break;
-		case AT91SAM9G45_ID_US2:
+		case 3:
 			configure_usart2_pins(pins);
 			start = AT91SAM9G45_BASE_US2;
-			id = 3;
 			break;
-		case AT91SAM9G45_ID_US3:
+		case 4:
 			configure_usart3_pins(pins);
 			start = AT91SAM9G45_BASE_US3;
-			id = 4;
 			break;
 		default:
 			return NULL;

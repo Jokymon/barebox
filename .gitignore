@@ -60,3 +60,4 @@ cscope.*
 
 # patches
 *.patch
+scripts/gen_netx_image

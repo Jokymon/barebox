@@ -934,8 +934,8 @@ static void usb_hub_power_on(struct usb_hub_device *hub)
 	for (i = 0; i < dev->maxchild; i++) {
 		usb_set_port_feature(dev, i + 1, USB_PORT_FEAT_POWER);
 		USB_HUB_PRINTF("port %d returns %lX\n", i + 1, dev->status);
-		wait_ms(hub->desc.bPwrOn2PwrGood * 2);
 	}
+	mdelay(20);
 }
 
 #define MAX_TRIES 5
@@ -1275,6 +1275,7 @@ static int usb_hub_probe(struct usb_device *dev, int ifnum)
 
 int usb_driver_register(struct usb_driver *drv)
 {
+	drv->driver.name = drv->name;
 	drv->driver.bus = &usb_bus_type;
 	return register_driver(&drv->driver);
 }

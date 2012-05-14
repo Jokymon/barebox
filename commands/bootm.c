@@ -46,21 +46,10 @@
 #include <uncompress.h>
 #include <memory.h>
 #include <filetype.h>
+#include <binfmt.h>
 #include <asm-generic/memory_layout.h>
 
 static LIST_HEAD(handler_list);
-
-#ifdef CONFIG_CMD_BOOTM_INITRD
-static inline int bootm_initrd(struct image_data *data)
-{
-	return data->initrd ? 1 : 0;
-}
-#else
-static inline int bootm_initrd(struct image_data *data)
-{
-	return 0;
-}
-#endif
 
 int register_image_handler(struct image_handler *handler)
 {
@@ -150,13 +139,18 @@ static int bootm_open_initrd_uimage(struct image_data *data)
 static int bootm_open_oftree(struct image_data *data, char *oftree, int num)
 {
 	enum filetype ft;
-	struct fdt_header *fdt;
+	struct fdt_header *fdt, *fixfdt;
 	int ret;
 	size_t size;
 
+	if (bootm_verbose(data))
+		printf("Loading oftree from '%s'\n", oftree);
+
 	ft = file_name_detect_type(oftree);
-	if ((int)ft < 0)
+	if ((int)ft < 0) {
+		printf("failed to open %s: %s\n", oftree, strerror(-(int)ft));
 		return ft;
+	}
 
 	if (ft == filetype_uimage) {
 #ifdef CONFIG_CMD_BOOTM_OFTREE_UIMAGE
@@ -196,25 +190,25 @@ static int bootm_open_oftree(struct image_data *data, char *oftree, int num)
 				file_type_to_string(ft));
 	}
 
-	if (bootm_verbose(data))
-		printf("Loading oftree from '%s'\n", oftree);
+	fixfdt = xmemalign(4096, size + 0x8000);
+	memcpy(fixfdt, fdt, size);
 
-	fdt = xrealloc(fdt, size + 0x8000);
-	fdt_open_into(fdt, fdt, size + 0x8000);
+	free(fdt);
 
-	if (!fdt) {
-		printf("unable to read %s\n", oftree);
+	ret = fdt_open_into(fixfdt, fixfdt, size + 0x8000);
+	if (ret) {
+		printf("unable to parse %s\n", oftree);
 		return -ENODEV;
 	}
 
-	ret = of_fix_tree(fdt);
+	ret = of_fix_tree(fixfdt);
 	if (ret)
 		return ret;
 
 	if (bootm_verbose(data) > 1)
-		fdt_print(fdt, "/");
+		fdt_print(fixfdt, "/");
 
-	data->oftree = fdt;
+	data->oftree = fixfdt;
 
 	return ret;
 }
@@ -252,6 +246,14 @@ static void bootm_image_name_and_no(char *name, int *no)
 	*no = simple_strtoul(at, NULL, 10);
 }
 
+#define BOOTM_OPTS_COMMON "ca:e:vo:f"
+
+#ifdef CONFIG_CMD_BOOTM_INITRD
+#define BOOTM_OPTS BOOTM_OPTS_COMMON "L:r:"
+#else
+#define BOOTM_OPTS BOOTM_OPTS_COMMON
+#endif
+
 static int do_bootm(int argc, char *argv[])
 {
 	int opt;
@@ -269,7 +271,7 @@ static int do_bootm(int argc, char *argv[])
 	data.verify = 0;
 	data.verbose = 0;
 
-	while ((opt = getopt(argc, argv, "cL:r:a:e:vo:f")) > 0) {
+	while ((opt = getopt(argc, argv, BOOTM_OPTS)) > 0) {
 		switch(opt) {
 		case 'c':
 			data.verify = 1;
@@ -330,7 +332,7 @@ static int do_bootm(int argc, char *argv[])
 		}
 	}
 
-	if (bootm_initrd(&data)) {
+	if (IS_ENABLED(CONFIG_CMD_BOOTM_INITRD) && data.initrd_file) {
 		bootm_image_name_and_no(data.initrd_file, &data.initrd_num);
 
 		initrd_type = file_name_detect_type(data.initrd_file);
@@ -451,6 +453,17 @@ BAREBOX_CMD_START(bootm)
 BAREBOX_CMD_END
 
 BAREBOX_MAGICVAR(bootargs, "Linux Kernel parameters");
+
+static struct binfmt_hook binfmt_uimage_hook = {
+	.type = filetype_uimage,
+	.exec = "bootm",
+};
+
+static int binfmt_uimage_init(void)
+{
+	return binfmt_register(&binfmt_uimage_hook);
+}
+fs_initcall(binfmt_uimage_init);
 
 /**
  * @file

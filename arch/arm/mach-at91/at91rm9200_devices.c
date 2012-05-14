@@ -38,8 +38,8 @@ void __init at91_add_device_usbh_ohci(struct at91_usbh_data *data)
 	if (!data)
 		return;
 
-	add_generic_device("at91_ohci", -1, NULL, AT91RM9200_UHP_BASE, 1024 * 1024,
-			   IORESOURCE_MEM, data);
+	add_generic_device("at91_ohci", DEVICE_ID_DYNAMIC, NULL, AT91RM9200_UHP_BASE,
+			1024 * 1024, IORESOURCE_MEM, data);
 }
 #else
 void __init at91_add_device_usbh_ohci(struct at91_usbh_data *data) {}
@@ -60,8 +60,8 @@ void __init at91_add_device_udc(struct at91_udc_data *data)
 	if (data->pullup_pin > 0)
 		at91_set_gpio_output(data->pullup_pin, 0);
 
-	add_generic_device("at91_udc", -1, NULL, AT91RM9200_BASE_UDP, SZ_16K,
-			   IORESOURCE_MEM, data);
+	add_generic_device("at91_udc", DEVICE_ID_DYNAMIC, NULL, AT91RM9200_BASE_UDP,
+			SZ_16K, IORESOURCE_MEM, data);
 }
 #else
 void __init at91_add_device_udc(struct at91_udc_data *data) {}
@@ -273,27 +273,22 @@ struct device_d * __init at91_register_uart(unsigned id, unsigned pins)
 		case 0:		/* DBGU */
 			configure_dbgu_pins();
 			start = AT91_BASE_SYS + AT91_DBGU;
-			id = 0;
 			break;
-		case AT91RM9200_ID_US0:
+		case 1:
 			configure_usart0_pins(pins);
 			start = AT91RM9200_BASE_US0;
-			id = 1;
 			break;
-		case AT91RM9200_ID_US1:
+		case 2:
 			configure_usart1_pins(pins);
 			start = AT91RM9200_BASE_US1;
-			id = 2;
 			break;
-		case AT91RM9200_ID_US2:
+		case 3:
 			configure_usart2_pins(pins);
 			start = AT91RM9200_BASE_US2;
-			id = 3;
 			break;
-		case AT91RM9200_ID_US3:
+		case 4:
 			configure_usart3_pins(pins);
 			start = AT91RM9200_BASE_US3;
-			id = 4;
 			break;
 		default:
 			return NULL;
