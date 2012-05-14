@@ -19,6 +19,9 @@ set ASFLAGS=%ALLFLAGS% -I. -D__ASSEMBLY__
 set CFLAGS=%ALLFLAGS% -fvisibility=default -fno-builtin -D__KERNEL__ -DCONFIG_MEMORY_LAYOUT_DEFAULT
 set LDFLAGS=-nostdlib
 
+REM ----------------- generate compile.h
+python scripts\mkcompile_h.py include\generated\compile.h sandbox gcc
+
 REM ----------------- base library compilation
 
 mkdir build\base

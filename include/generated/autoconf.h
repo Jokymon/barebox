@@ -11,6 +11,8 @@
 
 #define CONFIG_X86_HDBOOT 1
 
+#define CONFIG_BINFMT
+
 #define CONFIG_MODULES 0
 #define __enabled_CONFIG_MODULES 0
 #define __enabled_CONFIG_MODULES_MODULE 0
@@ -31,3 +33,4 @@
 #define __enabled_CONFIG_PARAMETER 1
 #define __enabled_CONFIG_PARAMETER_MODULE 0
 
+#define CONFIG_SHELL_HUSH 1
