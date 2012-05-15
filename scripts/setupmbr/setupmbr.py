@@ -20,6 +20,13 @@ CHS_END_OFFSET         = 5
 PARTITION_START_OFFSET = 8
 PARTITION_SIZE_OFFSET  = 12
 
+def values2string(values):
+    import sys
+    if sys.version_info[0]==2:
+        return "".join(map(chr, values))
+    else:
+        return bytes(values)
+
 def populate_globals_from_header(header_file):
     f = open(header_file, "r")
     for line in f.readlines():
@@ -44,15 +51,16 @@ class Field(object):
         return sum(summands)
 
     def __set__(self, instance, value):
-        if value >= 2**(size*8):
+        if value >= 2**(self.size*8):
             raise ValueError("%u does not fit in this field" % value)
         powers = []
         while value!=0:
             powers.append( int(value % 256) )
             value /= 256
         powers.extend( self.size*[0] )
-        start = instance.start_offset += self.start
-        instance.array[start:start+self.size] = powers[:self.size]
+        start = instance.start_offset + self.start
+
+        instance.array[start:start+self.size] = values2string(powers[0:self.size])
 
 class StructTemplate(object):
     def __len__(self):
@@ -88,6 +96,12 @@ class Partition(StructTemplate):
     partition_size  = Field(12, 4)
 
 def target2host_32(value):
+    return value
+
+def host2target_16(value):
+    return value
+
+def host2target_64(value):
     return value
 
 class SetupMbrError:
@@ -172,6 +186,10 @@ def barebox_overlay_mbr(fd_barebox, fd_hd, pers_sector_count):
     indirect = (pers_sector_count + 1) * SECTOR_SIZE
 
     fill_daps(DAPS(hd_image, embed), 1, INDIRECT_AREA, INDIRECT_SEGMENT, 1 + pers_sector_count)
+
+    barebox_linear_image(indirect, sb.st_size, pers_sector_count)
+
+    store_pers_env_info(embed, 1, pers_sector_count)
 
     hd_image.close()
     barebox_image.close()
