@@ -30,7 +30,7 @@ def populate_globals_from_header(header_file):
 
 populate_globals_from_header("arch/x86/mach-i386/include/mach/barebox.lds.h")
 
-class Field:
+class Field(object):
     def __init__(self, start, size):
         self.start = start
         self.size = size
@@ -44,9 +44,25 @@ class Field:
         return sum(summands)
 
     def __set__(self, instance, value):
-        print("Setting not yet implemented")
+        if value >= 2**(size*8):
+            raise ValueError("%u does not fit in this field" % value)
+        powers = []
+        while value!=0:
+            powers.append( int(value % 256) )
+            value /= 256
+        powers.extend( self.size*[0] )
+        start = instance.start_offset += self.start
+        instance.array[start:start+self.size] = powers[:self.size]
 
-class DAPS:
+class StructTemplate(object):
+    def __len__(self):
+        len = 0
+        for attr in self.__class__.__dict__.values():
+            if isinstance(attr, Field):
+                len += attr.size
+        return len
+
+class DAPS(StructTemplate):
     def __init__(self, array, start_offset):
         self.array = array
         self.start_offset = start_offset
@@ -59,7 +75,7 @@ class DAPS:
     segment = Field(6, 2)
     lba = Field(8, 4)
 
-class Partition:
+class Partition(StructTemplate):
     def __init__(self, array, start_offset):
         self.array = array
         self.start_offset = start_offset
@@ -76,6 +92,23 @@ def target2host_32(value):
 
 class SetupMbrError:
     pass
+
+def fill_daps(sector, count, offset, segment, lba):
+    assert count < 128
+    assert offset < 0x10000
+    assert segment < 0x10000
+
+    sector.size = len(sector)
+    sector.res1 = 0
+    sector.count = count
+    sector.res2 = 0
+    sector.offset = host2target_16(offset)
+    sector.segment = host2target_16(segment)
+    sector.lba = host2target_64(lba)
+
+def invalidate_daps(sector):
+    sector.size = MARK_DAPS_INVALID
+    sector.res1 = 0
 
 def barebox_linear_image(daps_table, size, pers_sector_count):
     pass
@@ -108,11 +141,6 @@ def check_for_space(hd_image, size):
         print("Move begin of the first partition beyond sector %u" % ((size + SECTOR_SIZE - 1) / SECTOR_SIZE))
         return False
     return True
-
-def fill_daps(sector, count, offset, segment, lba):
-    assert count < 128
-    assert offset < 0x10000
-    assert segment < 0x10000
 
 def store_pers_env_info(patch_area, pers_sector_start, pers_sector_count):
     pass
