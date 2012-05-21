@@ -28,17 +28,6 @@
 # - and maybe some others
 #
 
-SECTOR_SIZE = 512
-OFFSET_OF_SIGNATURE = 510
-OFFSET_OF_PARTITION_TABLE = 446
-
-BOOT_INDICATOR_OFFSET  = 0
-CHS_BEGIN_OFFSET       = 1
-TYPE_OFFSET            = 4
-CHS_END_OFFSET         = 5
-PARTITION_START_OFFSET = 8
-PARTITION_SIZE_OFFSET  = 12
-
 def values2string(values):
     import sys
     if sys.version_info[0]==2:
