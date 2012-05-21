@@ -1,13 +1,32 @@
-#minibox = open("minibox.img", "rb")
-#data = minibox.read()
-#minibox.close()
+# Copyright (C) 2009 Juergen Beisert, Pengutronix
 #
-#import os
-#c50img = open("c50m.img", "rb+")
-#c50img.seek(0, os.SEEK_SET)
-#c50img.write( data )
-#c50img.close()
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License as
+# published by the Free Software Foundation; either version 2 of
+# the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+# MA 02111-1307 USA
+#
 
+#
+# @file
+# @brief Write the barebox binary to the MBR and the following disk sectors
+#
+# Also patch dedicated locations in the image to make it work at runtime
+#
+# Current restrictions are:
+# - only installs into MBR and the sectors after it
+# - tested only with QEMU
+# - and maybe some others
+#
 
 SECTOR_SIZE = 512
 OFFSET_OF_SIGNATURE = 510
