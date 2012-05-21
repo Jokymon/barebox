@@ -21,6 +21,7 @@ set LDFLAGS=-nostdlib
 
 REM ----------------- generate compile.h
 python scripts\mkcompile_h.py include\generated\compile.h sandbox gcc
+@if %errorlevel% neq 0 goto errorhandling
 
 REM ----------------- base library compilation
 
@@ -66,3 +67,10 @@ del /q build\barebox.lds
 
 %OBJCOPY% -I elf32-i386 -O binary -j .bootsector build\minibox build\minibox_mbr 
 %OBJCOPY% -I elf32-i386 -O binary build\minibox build\minibox.img
+
+@echo Compilation successfull
+@exit /b 0
+
+:errorhandling
+@echo Failure during compilation
+@exit /b %errorlevel%
