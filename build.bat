@@ -30,7 +30,7 @@ REM ----------------- base library compilation
 
 mkdir build\base
 del /q build\base\*
-del /q build\libbase.a
+if exist build\libbase.a del /q build\libbase.a
 
 for %%F in (common\*.c) do %GCC% %CFLAGS% %%F -c -o build\base\common_%%~nF.o
 for %%F in (lib\*.c) do %GCC% %CFLAGS% %%F -c -o build\base\base_%%~nF.o
@@ -62,7 +62,7 @@ REM ----------------- minibox compilation
 
 %GCC% %CFLAGS% arch\x86\mach-i386\reset.c -c -o build\reset.o
 
-del /q build\barebox.lds
+if exist build\barebox.lds del /q build\barebox.lds
 
 %CPP% -P arch\x86\lib\barebox.lds.S -I. -include include\generated\autoconf.h -Iinclude -Iarch\x86\mach-i386\include -DTEXT_BASE=0x00007c00 -DCONFIG_X86 -o build\barebox.lds
 
