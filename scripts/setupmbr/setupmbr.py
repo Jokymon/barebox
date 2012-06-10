@@ -205,7 +205,7 @@ def barebox_overlay_mbr(fd_barebox, fd_hd, pers_sector_count):
 def main():
     from optparse import OptionParser
     parser = OptionParser()
-    parser.add_option("-s", dest="barebox_pers_size", type="int",
+    parser.add_option("-s", dest="barebox_pers_size", type="int", default=-1,
                       help="sector count of the persistant environment storage")
     parser.add_option("-m", dest="barebox_image_filename",
                       help="")
@@ -217,6 +217,9 @@ def main():
 
     fd_barebox_image = open(options.barebox_image_filename, "r+b")
     fd_hd_image = open(options.hd_image_filename, "a+b")
+
+    if options.barebox_pers_size < 0:
+        options.barebox_pers_size = 0
 
     barebox_overlay_mbr(fd_barebox_image, fd_hd_image, options.barebox_pers_size)
 
