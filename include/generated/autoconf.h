@@ -34,3 +34,8 @@
 #define __enabled_CONFIG_PARAMETER_MODULE 0
 
 #define CONFIG_SHELL_HUSH 1
+
+#define CONFIG_DISK_BIOS 1
+#define __enabled_CONFIG_DISK_BIOS 1
+
+#define CONFIG_FLEXIBLE_BOOTARGS 1
