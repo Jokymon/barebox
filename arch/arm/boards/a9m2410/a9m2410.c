@@ -29,9 +29,11 @@
 #include <init.h>
 #include <asm/armlinux.h>
 #include <generated/mach-types.h>
+#include <asm-generic/sections.h>
 #include <partition.h>
 #include <nand.h>
 #include <io.h>
+#include <mach/devices-s3c24xx.h>
 #include <mach/s3c-iomap.h>
 #include <mach/s3c24xx-nand.h>
 #include <mach/s3c-generic.h>
@@ -109,8 +111,7 @@ static int a9m2410_devices_init(void)
 	writel(reg, S3C_MISCCR);
 
 	/* ----------- the devices the boot loader should work with -------- */
-	add_generic_device("s3c24x0_nand", DEVICE_ID_DYNAMIC, NULL, S3C24X0_NAND_BASE,
-			0, IORESOURCE_MEM, &nand_info);
+	s3c24xx_add_nand(&nand_info);
 	/*
 	 * SMSC 91C111 network controller on the baseboard
 	 * connected to CS line 1 and interrupt line
@@ -121,10 +122,10 @@ static int a9m2410_devices_init(void)
 
 #ifdef CONFIG_NAND
 	/* ----------- add some vital partitions -------- */
-	devfs_add_partition("nand0", 0x00000, 0x40000, PARTITION_FIXED, "self_raw");
+	devfs_add_partition("nand0", 0x00000, 0x40000, DEVFS_PARTITION_FIXED, "self_raw");
 	dev_add_bb_dev("self_raw", "self0");
 
-	devfs_add_partition("nand0", 0x40000, 0x20000, PARTITION_FIXED, "env_raw");
+	devfs_add_partition("nand0", 0x40000, 0x20000, DEVFS_PARTITION_FIXED, "env_raw");
 	dev_add_bb_dev("env_raw", "env0");
 #endif
 
@@ -136,17 +137,9 @@ static int a9m2410_devices_init(void)
 
 device_initcall(a9m2410_devices_init);
 
-#ifdef CONFIG_S3C24XX_NAND_BOOT
-void __bare_init nand_boot(void)
-{
-	s3c24x0_nand_load_image((void *)TEXT_BASE, 256 * 1024, 0);
-}
-#endif
-
 static int a9m2410_console_init(void)
 {
-	add_generic_device("s3c_serial", DEVICE_ID_DYNAMIC, NULL, S3C_UART1_BASE,
-			S3C_UART1_SIZE, IORESOURCE_MEM, NULL);
+	s3c24xx_add_uart1();
 	return 0;
 }
 

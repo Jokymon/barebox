@@ -48,6 +48,12 @@ static struct fec_platform_data fec_info = {
 };
 
 static iomux_v3_cfg_t f3s_pads[] = {
+	/* UART1 */
+	MX51_PAD_UART1_RXD__UART1_RXD,
+	MX51_PAD_UART1_TXD__UART1_TXD,
+	MX51_PAD_UART1_RTS__UART1_RTS,
+	MX51_PAD_UART1_CTS__UART1_CTS,
+	/* FEC */
 	MX51_PAD_EIM_EB2__FEC_MDIO,
 	MX51_PAD_EIM_EB3__FEC_RDATA1,
 	MX51_PAD_EIM_CS2__FEC_RDATA2,
@@ -66,7 +72,7 @@ static iomux_v3_cfg_t f3s_pads[] = {
 	MX51_PAD_NANDF_D11__FEC_RX_DV,
 	MX51_PAD_NANDF_D9__FEC_RDATA0,
 	MX51_PAD_NANDF_D8__FEC_TDATA0,
-	MX51_PAD_CSPI1_SS0__GPIO4_24,
+	MX51_PAD_CSPI1_SS0__ECSPI1_SS0,
 	MX51_PAD_CSPI1_MOSI__ECSPI1_MOSI,
 	MX51_PAD_CSPI1_MISO__ECSPI1_MISO,
 	MX51_PAD_CSPI1_RDY__ECSPI1_RDY,
@@ -111,7 +117,6 @@ static struct spi_imx_master spi_0_data = {
 static const struct spi_board_info mx51_babbage_spi_board_info[] = {
 	{
 		.name = "mc13xxx-spi",
-		.max_speed_hz = 300000,
 		.bus_num = 0,
 		.chip_select = 0,
 	},
@@ -173,7 +178,7 @@ static void babbage_power_init(void)
 		mc13xxx_reg_write(mc13xxx, MC13892_REG_SW_2, val);
 	}
 
-	if (mc13xxx->revision < MC13892_REVISION_2_0) {
+	if (mc13xxx_revision(mc13xxx) < MC13892_REVISION_2_0) {
 		/* Set switchers in PWM mode for Atlas 2.0 and lower */
 		/* Setup the switcher mode for SW1 & SW2*/
 		mc13xxx_reg_read(mc13xxx, MC13892_REG_SW_4, &val);
@@ -233,10 +238,6 @@ static void babbage_power_init(void)
 
 static int f3s_devices_init(void)
 {
-	imx51_iim_register_fec_ethaddr();
-	imx51_add_fec(&fec_info);
-	imx51_add_mmc0(NULL);
-
 	spi_register_board_info(mx51_babbage_spi_board_info,
 			ARRAY_SIZE(mx51_babbage_spi_board_info));
 	imx51_add_spi0(&spi_0_data);
@@ -246,6 +247,11 @@ static int f3s_devices_init(void)
 	console_flush();
 	imx51_init_lowlevel(800);
 	clock_notifier_call_chain();
+
+	imx51_iim_register_fec_ethaddr();
+	imx51_add_fec(&fec_info);
+	imx51_add_mmc0(NULL);
+	imx51_add_mmc1(NULL);
 
 	armlinux_set_bootparams((void *)0x90000100);
 	armlinux_set_architecture(MACH_TYPE_MX51_BABBAGE);
@@ -257,8 +263,8 @@ device_initcall(f3s_devices_init);
 
 static int f3s_part_init(void)
 {
-	devfs_add_partition("disk0", 0x00000, 0x40000, PARTITION_FIXED, "self0");
-	devfs_add_partition("disk0", 0x40000, 0x20000, PARTITION_FIXED, "env0");
+	devfs_add_partition("disk0", 0x00000, 0x40000, DEVFS_PARTITION_FIXED, "self0");
+	devfs_add_partition("disk0", 0x40000, 0x20000, DEVFS_PARTITION_FIXED, "env0");
 
 	return 0;
 }
@@ -268,12 +274,8 @@ static int f3s_console_init(void)
 {
 	mxc_iomux_v3_setup_multiple_pads(f3s_pads, ARRAY_SIZE(f3s_pads));
 
-	writel(0, 0x73fa8228);
-	writel(0, 0x73fa822c);
-	writel(0, 0x73fa8230);
-	writel(0, 0x73fa8234);
-
 	imx51_add_uart0();
+
 	return 0;
 }
 

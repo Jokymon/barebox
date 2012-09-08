@@ -31,11 +31,12 @@
 static LIST_HEAD(mtd_register_hooks);
 
 static 	ssize_t mtd_read(struct cdev *cdev, void* buf, size_t count,
-			  ulong offset, ulong flags)
+			  loff_t _offset, ulong flags)
 {
 	struct mtd_info *mtd = cdev->priv;
 	size_t retlen;
 	int ret;
+	unsigned long offset = _offset;
 
 	debug("mtd_read: 0x%08lx 0x%08x\n", offset, count);
 
@@ -64,20 +65,21 @@ static int all_ff(const void *buf, int len)
 }
 
 static ssize_t mtd_write(struct cdev* cdev, const void *buf, size_t _count,
-			  ulong offset, ulong flags)
+			  loff_t _offset, ulong flags)
 {
 	struct mtd_info *mtd = cdev->priv;
 	size_t retlen, now;
 	int ret = 0;
 	void *wrbuf = NULL;
 	size_t count = _count;
+	unsigned long offset = _offset;
 
 	if (NOTALIGNED(offset)) {
 		printf("offset 0x%0lx not page aligned\n", offset);
 		return -EINVAL;
 	}
 
-	dev_dbg(cdev->dev, "write: 0x%08lx 0x%08x\n", offset, count);
+	dev_dbg(cdev->dev, "write: 0x%08lx 0x%08lx\n", offset, count);
 	while (count) {
 		now = count > mtd->writesize ? mtd->writesize : count;
 
@@ -98,7 +100,7 @@ static ssize_t mtd_write(struct cdev* cdev, const void *buf, size_t _count,
 				ret = mtd->write(mtd, offset, now, &retlen,
 						  buf);
 			dev_dbg(cdev->dev,
-				"offset: 0x%08lx now: 0x%08x retlen: 0x%08x\n",
+				"offset: 0x%08lx now: 0x%08lx retlen: 0x%08lx\n",
 				offset, now, retlen);
 		}
 		if (ret)
@@ -123,16 +125,17 @@ int mtd_ioctl(struct cdev *cdev, int request, void *buf)
 	struct mtd_ecc_stats *ecc = buf;
 #endif
 	struct region_info_user *reg = buf;
+	loff_t *offset = buf;
 
 	switch (request) {
 	case MEMGETBADBLOCK:
-		dev_dbg(cdev->dev, "MEMGETBADBLOCK: 0x%08lx\n", (off_t)buf);
-		ret = mtd->block_isbad(mtd, (off_t)buf);
+		dev_dbg(cdev->dev, "MEMGETBADBLOCK: 0x%08llx\n", *offset);
+		ret = mtd->block_isbad(mtd, *offset);
 		break;
 #ifdef CONFIG_MTD_WRITE
 	case MEMSETBADBLOCK:
-		dev_dbg(cdev->dev, "MEMSETBADBLOCK: 0x%08lx\n", (off_t)buf);
-		ret = mtd->block_markbad(mtd, (off_t)buf);
+		dev_dbg(cdev->dev, "MEMSETBADBLOCK: 0x%08llx\n", *offset);
+		ret = mtd->block_markbad(mtd, *offset);
 		break;
 #endif
 	case MEMGETINFO:
@@ -156,9 +159,10 @@ int mtd_ioctl(struct cdev *cdev, int request, void *buf)
 #endif
 	case MEMGETREGIONINFO:
 		if (cdev->mtd) {
+			unsigned long size = cdev->size;
 			reg->offset = cdev->offset;
 			reg->erasesize = cdev->mtd->erasesize;
-			reg->numblocks = cdev->size/reg->erasesize;
+			reg->numblocks = size / reg->erasesize;
 			reg->regionindex = cdev->mtd->index;
 		}
 		break;
@@ -170,7 +174,7 @@ int mtd_ioctl(struct cdev *cdev, int request, void *buf)
 }
 
 #ifdef CONFIG_MTD_WRITE
-static ssize_t mtd_erase(struct cdev *cdev, size_t count, unsigned long offset)
+static int mtd_erase(struct cdev *cdev, size_t count, loff_t offset)
 {
 	struct mtd_info *mtd = cdev->priv;
 	struct erase_info erase;
@@ -244,7 +248,7 @@ int add_mtd_device(struct mtd_info *mtd, char *devname)
 
 	list_for_each_entry(hook, &mtd_register_hooks, hook)
 		if (hook->add_mtd_device)
-			hook->add_mtd_device(mtd, devname);
+			hook->add_mtd_device(mtd, devname, &hook->priv);
 
 	return 0;
 }
@@ -255,7 +259,9 @@ int del_mtd_device (struct mtd_info *mtd)
 
 	list_for_each_entry(hook, &mtd_register_hooks, hook)
 		if (hook->del_mtd_device)
-			hook->del_mtd_device(mtd);
+			hook->del_mtd_device(mtd, &hook->priv);
+
+	devfs_remove(&mtd->cdev);
 	unregister_device(&mtd->class_dev);
 	free(mtd->param_size.value);
 	free(mtd->cdev.name);

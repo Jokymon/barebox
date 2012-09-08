@@ -1,4 +1,4 @@
-menu "Library routines"
+menu "Library routines              "
 config PARAMETER
 	bool
 
@@ -34,5 +34,8 @@ config BCH
 
 config BITREV
        bool
+
+config QSORT
+	bool
 
 endmenu

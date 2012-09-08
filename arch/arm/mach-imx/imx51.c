@@ -24,17 +24,6 @@
 #include <mach/imx-regs.h>
 #include <mach/clock-imx51_53.h>
 
-#include "gpio.h"
-
-void *imx_gpio_base[] = {
-	(void *)MX51_GPIO1_BASE_ADDR,
-	(void *)MX51_GPIO2_BASE_ADDR,
-	(void *)MX51_GPIO3_BASE_ADDR,
-	(void *)MX51_GPIO4_BASE_ADDR,
-};
-
-int imx_gpio_count = ARRAY_SIZE(imx_gpio_base) * 32;
-
 #define SI_REV 0x48
 
 static u32 mx51_silicon_revision;
@@ -88,6 +77,11 @@ static int imx51_init(void)
 {
 	add_generic_device("imx_iim", 0, NULL, MX51_IIM_BASE_ADDR, SZ_4K,
 			IORESOURCE_MEM, NULL);
+
+	add_generic_device("imx-gpio", 0, NULL, 0x73f84000, 0x1000, IORESOURCE_MEM, NULL);
+	add_generic_device("imx-gpio", 1, NULL, 0x73f88000, 0x1000, IORESOURCE_MEM, NULL);
+	add_generic_device("imx-gpio", 2, NULL, 0x73f8c000, 0x1000, IORESOURCE_MEM, NULL);
+	add_generic_device("imx-gpio", 3, NULL, 0x73f90000, 0x1000, IORESOURCE_MEM, NULL);
 
 	return 0;
 }
@@ -269,7 +263,7 @@ void imx51_init_lowlevel(unsigned int cpufreq_mhz)
 	writel(0xffffffff, ccm + MX5_CCM_CCGR6);
 
 	/* Use PLL 2 for UART's, get 66.5MHz from it */
-	writel(0xA5A2A020, ccm + MX5_CCM_CSCMR1);
+	writel(0xA591A020, ccm + MX5_CCM_CSCMR1);
 	writel(0x00C30321, ccm + MX5_CCM_CSCDR1);
 
 	/* make sure divider effective */

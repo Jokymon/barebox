@@ -28,6 +28,7 @@
 #include <mach/imx-regs.h>
 #include <asm/armlinux.h>
 #include <asm-generic/sections.h>
+#include <asm/barebox-arm.h>
 #include <io.h>
 #include <mach/gpio.h>
 #include <partition.h>
@@ -166,7 +167,7 @@ static int mx21ads_devices_init(void)
 	for (i = 0; i < ARRAY_SIZE(mode); i++)
 		imx_gpio_mode(mode[i]);
 
-	add_cfi_flash_device(-1, 0xC8000000, 32 * 1024 * 1024, 0);
+	add_cfi_flash_device(DEVICE_ID_DYNAMIC, 0xC8000000, 32 * 1024 * 1024, 0);
 	imx21_add_nand(&nand_info);
 	add_generic_device("cs8900", DEVICE_ID_DYNAMIC, NULL, IMX_CS1_BASE, 0x1000,
 			IORESOURCE_MEM, NULL);
@@ -204,7 +205,8 @@ console_initcall(mx21ads_console_init);
 void __bare_init nand_boot(void)
 {
 	PCCR0 |= PCCR0_NFC_EN;
-	imx_nand_load_image((void *)TEXT_BASE, barebox_image_size);
+	imx_nand_load_image(_text, barebox_image_size);
+	board_init_lowlevel_return();
 }
 #endif
 

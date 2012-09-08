@@ -47,6 +47,17 @@ config BINFMT
 	bool
 	select FILETYPE
 
+config UIMAGE
+	select UNCOMPRESS
+	select CRC32
+	bool
+
+config GLOBALVAR
+	bool
+
+config STDDEV
+	bool
+
 menu "General Settings              "
 
 config LOCALVERSION
@@ -89,6 +100,48 @@ config ENVIRONMENT_VARIABLES
 	bool "environment variables support"
 
 menu "memory layout                 "
+
+config HAVE_PBL_IMAGE
+	bool
+
+config HAVE_IMAGE_COMPRESSION
+	bool
+
+config PBL_IMAGE
+	bool "Pre-Bootloader image"
+	depends on HAVE_PBL_IMAGE
+
+config PBL_FORCE_PIGGYDATA_COPY
+	bool
+	help
+	  In some case we need to copy the PIGGYDATA as the link address
+	  as example we run from SRAM and shutdown the SDRAM/DDR for
+	  reconfiguration but most of the time we just need to copy the
+	  executable code.
+
+if PBL_IMAGE
+
+config IMAGE_COMPRESSION
+	bool
+	depends on HAVE_IMAGE_COMPRESSION
+	default y
+
+if IMAGE_COMPRESSION
+
+choice
+	prompt "Compression"
+
+config IMAGE_COMPRESSION_LZO
+	bool "lzo"
+
+config IMAGE_COMPRESSION_GZIP
+	bool "gzip"
+
+endchoice
+
+endif
+
+endif
 
 config MMU
 	bool "Enable MMU"
@@ -280,6 +333,7 @@ choice
 		select COMMAND_SUPPORT
 		select PARAMETER
 		select BINFMT
+		select STDDEV
 		help
 		  Enable hush support. This is the most advanced shell available
 		  for barebox.
@@ -289,6 +343,7 @@ choice
 		select ENVIRONMENT_VARIABLES
 		select COMMAND_SUPPORT
 		select PARAMETER
+		select STDDEV
 		help
 		  simple shell. No if/then, no return values from commands, no loops
 
@@ -307,7 +362,13 @@ config GLOB
 	depends on SHELL_HUSH
 	help
 	  If you want to use wildcards like * or ? say y here.
-	
+
+config GLOB_SORT
+	select QSORT
+	bool
+	prompt "glob sort support"
+	depends on GLOB
+
 config PROMPT_HUSH_PS2
 	string
 	depends on SHELL_HUSH
@@ -342,6 +403,7 @@ config AUTO_COMPLETE
 config MENU
 	bool
 	prompt "Menu Framework"
+	depends on PROCESS_ESCAPE_SEQUENCE
 	help
 	   a menu framework that allow us to create list menu to simplify
 	   barebox and make it more user-frendly
@@ -461,6 +523,8 @@ config DEFAULT_ENVIRONMENT
 config DEFAULT_ENVIRONMENT_COMPRESSED
 	bool
 	depends on DEFAULT_ENVIRONMENT
+	depends on !IMAGE_COMPRESSION_LZO
+	depends on !IMAGE_COMPRESSION_GZIP
 	default y if ZLIB
 	default y if BZLIB
 	default y if LZO_DECOMPRESS
@@ -486,13 +550,31 @@ endchoice
 
 endif
 
+config HAVE_DEFAULT_ENVIRONMENT_NEW
+	bool
+
+config DEFAULT_ENVIRONMENT_GENERIC_NEW
+	bool
+	depends on DEFAULT_ENVIRONMENT
+	depends on SHELL_HUSH
+	select HUSH_GETOPT
+	select GLOB
+	select GLOB_SORT
+	select CMD_GLOBAL
+	select CMD_AUTOMOUNT
+	select CMD_BASENAME
+	select FLEXIBLE_BOOTARGS
+	prompt "Generic environment template"
+
 config DEFAULT_ENVIRONMENT_GENERIC
 	bool
+	depends on !HAVE_DEFAULT_ENVIRONMENT_NEW
 	depends on DEFAULT_ENVIRONMENT
 	depends on SHELL_HUSH
 	select HUSH_GETOPT
 	select CMD_CRC
 	select CMD_CRC_CMP
+	select CMD_AUTOMOUNT if HAVE_DEFAULT_ENVIRONMENT_NEW
 	prompt "Default environment generic"
 	help
 	  With this option barebox will use the generic default
@@ -520,6 +602,14 @@ config BAREBOXENV_TARGET
 
 config POLLER
 	bool "generic polling infrastructure"
+
+config RESET_SOURCE
+	bool "detect Reset cause"
+	depends on GLOBALVAR
+	help
+	  Provide a global variable at runtine which reflects the possible cause
+	  of the reset and why the bootloader is currently running. It can be
+	  useful for any kind of system recovery or repair.
 
 endmenu
 

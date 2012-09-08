@@ -8,6 +8,8 @@
 #include <asm/system.h>
 #include <memory.h>
 
+#include "mmu.h"
+
 static unsigned long *ttb;
 
 static void create_sections(unsigned long virt, unsigned long phys, int size_m,
@@ -21,12 +23,7 @@ static void create_sections(unsigned long virt, unsigned long phys, int size_m,
 	for (i = size_m; i > 0; i--, virt++, phys++)
 		ttb[virt] = (phys << 20) | flags;
 
-	asm volatile (
-		"bl __mmu_cache_flush;"
-		:
-		:
-		: "r0", "r1", "r2", "r3", "r6", "r10", "r12", "lr", "cc", "memory"
-	);
+	__mmu_cache_flush();
 }
 
 /*
@@ -147,7 +144,7 @@ static int arm_mmu_remap_sdram(struct memory_bank *bank)
 	if ((phys & (SZ_1M - 1)) || (bank->size & (SZ_1M - 1)))
 		return -EINVAL;
 
-	ptes = memalign(0x400, num_ptes * sizeof(u32));
+	ptes = memalign(PAGE_SIZE, num_ptes * sizeof(u32));
 
 	debug("ptes: 0x%p ttb_start: 0x%08lx ttb_end: 0x%08lx\n",
 			ptes, ttb_start, ttb_end);
@@ -164,6 +161,9 @@ static int arm_mmu_remap_sdram(struct memory_bank *bank)
 			(0 << 4);
 		pte += 256;
 	}
+
+	dma_flush_range((unsigned long)ttb, (unsigned long)ttb + 0x4000);
+	dma_flush_range((unsigned long)ptes, num_ptes * sizeof(u32));
 
 	tlb_invalidate();
 
@@ -252,12 +252,7 @@ static int mmu_init(void)
 		create_sections(bank->start, bank->start, bank->size >> 20,
 				PMD_SECT_DEF_CACHED);
 
-	asm volatile (
-		"bl __mmu_cache_on;"
-		:
-		:
-		: "r0", "r1", "r2", "r3", "r6", "r10", "r12", "lr", "cc", "memory"
-        );
+	__mmu_cache_on();
 
 	/*
 	 * Now that we have the MMU and caches on remap sdram again using
@@ -281,13 +276,8 @@ void mmu_disable(void)
 	if (outer_cache.disable)
 		outer_cache.disable();
 
-	asm volatile (
-		"bl __mmu_cache_flush;"
-		"bl __mmu_cache_off;"
-		:
-		:
-		: "r0", "r1", "r2", "r3", "r6", "r10", "r12", "lr", "cc", "memory"
-	);
+	__mmu_cache_flush();
+	__mmu_cache_off();
 }
 
 #define PAGE_ALIGN(s) ((s) + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
@@ -299,11 +289,9 @@ void *dma_alloc_coherent(size_t size)
 	size = PAGE_ALIGN(size);
 	ret = xmemalign(4096, size);
 
-#ifdef CONFIG_MMU
 	dma_inv_range((unsigned long)ret, (unsigned long)ret + size);
 
 	remap_range(ret, size, PTE_FLAGS_UNCACHED);
-#endif
 
 	return ret;
 }
@@ -320,9 +308,7 @@ void *phys_to_virt(unsigned long phys)
 
 void dma_free_coherent(void *mem, size_t size)
 {
-#ifdef CONFIG_MMU
 	remap_range(mem, size, PTE_FLAGS_CACHED);
-#endif
 
 	free(mem);
 }

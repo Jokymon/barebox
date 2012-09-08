@@ -38,6 +38,7 @@
 
 #include <asm/armlinux.h>
 #include <asm-generic/sections.h>
+#include <asm/barebox-arm.h>
 #include <io.h>
 #include <generated/mach-types.h>
 
@@ -158,19 +159,19 @@ static int f3s_devices_init(void)
 	 * This platform supports NOR and NAND
 	 */
 	imx35_add_nand(&nand_info);
-	add_cfi_flash_device(-1, IMX_CS0_BASE, 64 * 1024 * 1024, 0);
+	add_cfi_flash_device(DEVICE_ID_DYNAMIC, IMX_CS0_BASE, 64 * 1024 * 1024, 0);
 
 	switch ((reg >> 25) & 0x3) {
 	case 0x01:		/* NAND is the source */
-		devfs_add_partition("nand0", 0x00000, 0x40000, PARTITION_FIXED, "self_raw");
+		devfs_add_partition("nand0", 0x00000, 0x40000, DEVFS_PARTITION_FIXED, "self_raw");
 		dev_add_bb_dev("self_raw", "self0");
-		devfs_add_partition("nand0", 0x40000, 0x80000, PARTITION_FIXED, "env_raw");
+		devfs_add_partition("nand0", 0x40000, 0x80000, DEVFS_PARTITION_FIXED, "env_raw");
 		dev_add_bb_dev("env_raw", "env0");
 		break;
 
 	case 0x00:		/* NOR is the source */
-		devfs_add_partition("nor0", 0x00000, 0x40000, PARTITION_FIXED, "self0");
-		devfs_add_partition("nor0", 0x40000, 0x80000, PARTITION_FIXED, "env0");
+		devfs_add_partition("nor0", 0x00000, 0x40000, DEVFS_PARTITION_FIXED, "self0");
+		devfs_add_partition("nor0", 0x40000, 0x80000, DEVFS_PARTITION_FIXED, "env0");
 		protect_file("/dev/env0", 1);
 		break;
 	}
@@ -361,7 +362,6 @@ static int f3s_get_rev(struct mc13xxx *mc13xxx)
 	if (err)
 		return err;
 
-	dev_info(&mc13xxx->client->dev, "revision: 0x%x\n", rev);
 	if (rev == 0x00ffffff)
 		return -ENODEV;
 
@@ -378,8 +378,7 @@ static int f3s_pmic_init_v2(struct mc13xxx *mc13xxx)
 	err |= mc13xxx_set_bits(mc13xxx, MC13892_REG_SETTING_0, 0x03, 0x03);
 	err |= mc13xxx_set_bits(mc13xxx, MC13892_REG_MODE_0, 0x01, 0x01);
 	if (err)
-		dev_err(&mc13xxx->client->dev,
-			"Init sequence failed, the system might not be working!\n");
+		printf("mc13892 Init sequence failed, the system might not be working!\n");
 
 	return err;
 }
@@ -450,6 +449,7 @@ void __bare_init nand_boot(void)
 	 * The driver is able to detect NAND's pagesize by CPU internal
 	 * fuses or external pull ups. But not the blocksize...
 	 */
-	imx_nand_load_image((void *)TEXT_BASE, barebox_image_size);
+	imx_nand_load_image(_text, barebox_image_size);
+	board_init_lowlevel_return();
 }
 #endif

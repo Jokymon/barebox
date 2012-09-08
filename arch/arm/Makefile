@@ -61,6 +61,7 @@ machine-$(CONFIG_ARCH_OMAP)		:= omap
 machine-$(CONFIG_ARCH_PXA)		:= pxa
 machine-$(CONFIG_ARCH_SAMSUNG)		:= samsung
 machine-$(CONFIG_ARCH_VERSATILE)	:= versatile
+machine-$(CONFIG_ARCH_TEGRA)		:= tegra
 
 # Board directory name.  This list is sorted alphanumerically
 # by CONFIG_* macro name.
@@ -93,7 +94,6 @@ board-$(CONFIG_MACH_IMX21ADS)			:= imx21ads
 board-$(CONFIG_MACH_IMX27ADS)			:= imx27ads
 board-$(CONFIG_MACH_MIOA701)			:= mioa701
 board-$(CONFIG_MACH_MMCCPU)			:= mmccpu
-board-$(CONFIG_MACH_MX1ADS)			:= mx1ads
 board-$(CONFIG_MACH_NOMADIK_8815NHK)		:= nhk8815
 board-$(CONFIG_MACH_NXDB500)			:= netx
 board-$(CONFIG_MACH_OMAP343xSDP)		:= omap343xdsp
@@ -117,11 +117,15 @@ board-$(CONFIG_MACH_MX23EVK)			:= freescale-mx23-evk
 board-$(CONFIG_MACH_CHUMBY)			:= chumby_falconwing
 board-$(CONFIG_MACH_TX28)			:= karo-tx28
 board-$(CONFIG_MACH_MX28EVK)			:= freescale-mx28-evk
+board-$(CONFIG_MACH_CFA10036)			:= crystalfontz-cfa10036
 board-$(CONFIG_MACH_FREESCALE_MX51_PDK)		:= freescale-mx51-pdk
 board-$(CONFIG_MACH_FREESCALE_MX53_LOCO)	:= freescale-mx53-loco
 board-$(CONFIG_MACH_FREESCALE_MX53_SMD)		:= freescale-mx53-smd
 board-$(CONFIG_MACH_GUF_CUPID)			:= guf-cupid
-board-$(CONFIG_MACH_MINI2440)			:= mini2440
+board-$(CONFIG_MACH_MINI2440)			:= friendlyarm-mini2440
+board-$(CONFIG_MACH_MINI6410)			:= friendlyarm-mini6410
+board-$(CONFIG_MACH_TINY6410)			:= friendlyarm-tiny6410
+board-$(CONFIG_MACH_QIL_A9260)			:= qil-a9260
 board-$(CONFIG_MACH_TNY_A9260)			:= tny-a926x
 board-$(CONFIG_MACH_TNY_A9263)			:= tny-a926x
 board-$(CONFIG_MACH_TNY_A9G20)			:= tny-a926x
@@ -133,6 +137,10 @@ board-$(CONFIG_MACH_TX25)			:= karo-tx25
 board-$(CONFIG_MACH_TQMA53)			:= tqma53
 board-$(CONFIG_MACH_TX51)			:= karo-tx51
 board-$(CONFIG_MACH_MX6Q_ARM2)			:= freescale-mx6-arm2
+board-$(CONFIG_MACH_TOSHIBA_AC100)		:= toshiba-ac100
+board-$(CONFIG_MACH_CCMX51)			:= ccxmx51
+board-$(CONFIG_MACH_TINY210)			:= friendlyarm-tiny210
+board-$(CONFIG_MACH_SABRELITE)			:= freescale-mx6-sabrelite
 
 machdirs := $(patsubst %,arch/arm/mach-%/,$(machine-y))
 
@@ -152,8 +160,17 @@ CPPFLAGS += -fdata-sections -ffunction-sections
 LDFLAGS_barebox += -static --gc-sections
 endif
 
-barebox.netx: barebox.bin
-	$(Q)scripts/gen_netx_image -i barebox.bin -o barebox.netx		\
+ifdef CONFIG_IMAGE_COMPRESSION
+KBUILD_BINARY := arch/arm/pbl/zbarebox.bin
+KBUILD_TARGET := zbarebox.bin
+$(KBUILD_BINARY): $(KBUILD_TARGET)
+else
+KBUILD_BINARY := barebox.bin
+KBUILD_TARGET := barebox.bin
+endif
+
+barebox.netx: $(KBUILD_BINARY)
+	$(Q)scripts/gen_netx_image -i $< -o barebox.netx		\
 		--sdramctrl=$(CONFIG_NETX_SDRAM_CTRL)			\
 		--sdramtimctrl=$(CONFIG_NETX_SDRAM_TIMING_CTRL)		\
 		--memctrl=$(CONFIG_NETX_MEM_CTRL)			\
@@ -161,19 +178,48 @@ barebox.netx: barebox.bin
 		--cookie=$(CONFIG_NETX_COOKIE);
 
 ifeq ($(machine-y),netx)
-KBUILD_IMAGE := barebox.netx
+KBUILD_TARGET := barebox.netx
+KBUILD_BINARY := $(KBUILD_TARGET)
 endif
 
-MLO: barebox.bin
-	@echo "  IFT    " $@
-	$(Q)scripts/omap_signGP barebox.bin $(TEXT_BASE) 1
-	$(Q)test -e barebox.bin.ift && mv barebox.bin.ift MLO
+barebox.s5p: $(KBUILD_BINARY)
+	$(Q)scripts/s5p_cksum $< barebox.s5p
+
+ifeq ($(CONFIG_ARCH_S5PCxx),y)
+KBUILD_TARGET := barebox.s5p
+KBUILD_BINARY := $(KBUILD_TARGET)
+endif
+
+quiet_cmd_mlo ?= IFT     $@
+	cmd_mlo ?= scripts/omap_signGP $< $(TEXT_BASE) 1; \
+		     test -e $<.ift && mv $<.ift MLO
+
+MLO: $(KBUILD_BINARY)
+	$(call if_changed,mlo)
 
 ifeq ($(CONFIG_OMAP_BUILD_IFT),y)
-KBUILD_IMAGE := MLO
+KBUILD_TARGET := MLO
+KBUILD_BINARY := $(KBUILD_TARGET)
 endif
 
-all: $(KBUILD_IMAGE)
+barebox.ubl: $(KBUILD_BINARY)
+	@echo "  UBL    " $@
+	$(Q)scripts/mkublheader $< > barebox.ubl
+	$(Q)cat $< >> barebox.ubl
+
+ifeq ($(CONFIG_ARCH_DAVINCI),y)
+KBUILD_TARGET := barebox.ubl
+KBUILD_BINARY := $(KBUILD_TARGET)
+endif
+
+pbl := arch/arm/pbl
+zbarebox.S zbarebox.bin zbarebox: barebox.bin
+	$(Q)$(MAKE) $(build)=$(pbl) $(pbl)/$@
+
+archclean:
+	$(MAKE) $(clean)=$(pbl)
+
+KBUILD_IMAGE := $(KBUILD_BINARY)
 
 archprepare: maketools
 maketools:
@@ -196,7 +242,6 @@ endif
 common-y += $(BOARD) $(MACH)
 common-y += arch/arm/lib/ arch/arm/cpu/
 
-lds-$(CONFIG_GENERIC_LINKER_SCRIPT)	:= arch/arm/lib/barebox.lds
-lds-$(CONFIG_BOARD_LINKER_SCRIPT)	:= $(BOARD)/barebox.lds
+lds-y	:= arch/arm/lib/barebox.lds
 
-CLEAN_FILES += include/generated/mach-types.h arch/arm/lib/barebox.lds
+CLEAN_FILES += include/generated/mach-types.h arch/arm/lib/barebox.lds barebox-flash-image

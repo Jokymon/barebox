@@ -51,7 +51,7 @@ static struct NS16550_plat serial_plat = {
 static int pcaaxl2_console_init(void)
 {
 	/* Register the serial port */
-	add_ns16550_device(-1, OMAP44XX_UART3_BASE, 1024,
+	add_ns16550_device(DEVICE_ID_DYNAMIC, OMAP44XX_UART3_BASE, 1024,
 		IORESOURCE_MEM_8BIT, &serial_plat);
 
 	return 0;
@@ -85,7 +85,7 @@ static void pcaaxl2_network_init(void)
 {
 	gpmc_cs_config(5, &net_cfg);
 
-	add_ks8851_device(-1, net_cfg.base, net_cfg.base + 2,
+	add_ks8851_device(DEVICE_ID_DYNAMIC, net_cfg.base, net_cfg.base + 2,
 				IORESOURCE_MEM_16BIT, NULL);
 }
 
@@ -103,6 +103,12 @@ static struct omap_hsmmc_platform_data mmc_device = {
 #define OMAP4_MMC1_PBIASLITE_VMODE		(1<<21)
 #define OMAP4_MMC1_PBIASLITE_PWRDNZ		(1<<22)
 #define OMAP4_MMC1_PWRDNZ			(1<<26)
+
+static struct gpmc_nand_platform_data nand_plat = {
+	.device_width = 16,
+	.ecc_mode = OMAP_ECC_BCH8_CODE_HW,
+	.nand_cfg = &omap4_nand_cfg,
+};
 
 static int pcaaxl2_devices_init(void)
 {
@@ -124,18 +130,17 @@ static int pcaaxl2_devices_init(void)
 
 	pcaaxl2_network_init();
 
-	gpmc_generic_nand_devices_init(0, 16,
-			OMAP_ECC_BCH8_CODE_HW, &omap4_nand_cfg);
+	omap_add_gpmc_nand_device(&nand_plat);
 
 #ifdef CONFIG_PARTITION
 	devfs_add_partition("nand0", 0x00000, SZ_128K,
-			PARTITION_FIXED, "xload_raw");
+			DEVFS_PARTITION_FIXED, "xload_raw");
 	dev_add_bb_dev("xload_raw", "xload");
 	devfs_add_partition("nand0", SZ_128K, SZ_256K,
-			PARTITION_FIXED, "self_raw");
+			DEVFS_PARTITION_FIXED, "self_raw");
 	dev_add_bb_dev("self_raw", "self0");
 	devfs_add_partition("nand0", SZ_128K + SZ_256K, SZ_128K,
-			PARTITION_FIXED, "env_raw");
+			DEVFS_PARTITION_FIXED, "env_raw");
 	dev_add_bb_dev("env_raw", "env0");
 #endif
 

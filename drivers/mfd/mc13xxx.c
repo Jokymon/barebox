@@ -32,18 +32,36 @@
 
 #define DRIVERNAME		"mc13xxx"
 
+enum mc13xxx_mode {
+	MC13XXX_MODE_I2C,
+	MC13XXX_MODE_SPI,
+};
+
+struct mc13xxx {
+	struct cdev			cdev;
+	union {
+		struct i2c_client	*client;
+		struct spi_device	*spi;
+	};
+	enum mc13xxx_mode		mode;
+	int				revision;
+};
+
 #define to_mc13xxx(a)		container_of(a, struct mc13xxx, cdev)
 
 static struct mc13xxx *mc_dev;
 
 struct mc13xxx *mc13xxx_get(void)
 {
-	if (!mc_dev)
-		return NULL;
-
 	return mc_dev;
 }
 EXPORT_SYMBOL(mc13xxx_get);
+
+int mc13xxx_revision(struct mc13xxx *mc13xxx)
+{
+	return mc13xxx->revision;
+}
+EXPORT_SYMBOL(mc13xxx_revision);
 
 #ifdef CONFIG_SPI
 static int spi_rw(struct spi_device *spi, void * buf, size_t len)
@@ -163,7 +181,7 @@ int mc13xxx_set_bits(struct mc13xxx *mc13xxx, u8 reg, u32 mask, u32 val)
 }
 EXPORT_SYMBOL(mc13xxx_set_bits);
 
-static ssize_t mc_read(struct cdev *cdev, void *_buf, size_t count, ulong offset, ulong flags)
+static ssize_t mc_read(struct cdev *cdev, void *_buf, size_t count, loff_t offset, ulong flags)
 {
 	struct mc13xxx *priv = to_mc13xxx(cdev);
 	u32 *buf = _buf;
@@ -184,7 +202,7 @@ static ssize_t mc_read(struct cdev *cdev, void *_buf, size_t count, ulong offset
 	return count;
 }
 
-static ssize_t mc_write(struct cdev *cdev, const void *_buf, size_t count, ulong offset, ulong flags)
+static ssize_t mc_write(struct cdev *cdev, const void *_buf, size_t count, loff_t offset, ulong flags)
 {
 	struct mc13xxx *mc13xxx = to_mc13xxx(cdev);
 	const u32 *buf = _buf;
@@ -234,7 +252,7 @@ static struct mc13892_rev mc13892_revisions[] = {
 static int mc13xxx_query_revision(struct mc13xxx *mc13xxx)
 {
 	unsigned int rev_id;
-	char *chipname, *revstr;
+	char *chipname, revstr[5];
 	int rev, i;
 
 	mc13xxx_reg_read(mc13xxx, MC13XXX_REG_IDENTIFICATION, &rev_id);
@@ -247,9 +265,9 @@ static int mc13xxx_query_revision(struct mc13xxx *mc13xxx)
 		/* Ver 0.2 is actually 3.2a. Report as 3.2 */
 		if (rev == 0x02) {
 			rev = 0x32;
-			revstr = "3.2a";
+			strcpy(revstr, "3.2a");
 		} else
-			revstr = asprintf("%d.%d", rev / 0x10, rev % 10);
+			sprintf(revstr, "%d.%d", rev / 0x10, rev % 10);
 		break;
 	case 7:
 		chipname = "MC13892";
@@ -261,12 +279,12 @@ static int mc13xxx_query_revision(struct mc13xxx *mc13xxx)
 			return -EINVAL;
 
 		rev = mc13892_revisions[i].rev;
-		revstr = mc13892_revisions[i].revstr;
+		strcpy(revstr, mc13892_revisions[i].revstr);
 
 		if (rev == MC13892_REVISION_2_0) {
 			if ((rev_id >> 9) & 0x3) {
 				rev = MC13892_REVISION_2_0a;
-				revstr = "2.0a";
+				strcpy(revstr, "2.0a");
 			}
 		}
 		break;
@@ -300,6 +318,7 @@ static int mc_probe(struct device_d *dev, enum mc13xxx_mode mode)
 		mc_dev->spi = dev->type_data;
 		mc_dev->spi->mode = SPI_MODE_0 | SPI_CS_HIGH;
 		mc_dev->spi->bits_per_word = 32;
+		mc_dev->spi->max_speed_hz = 20000000;
 	}
 	mc_dev->cdev.size = 256;
 	mc_dev->cdev.dev = dev;
@@ -308,6 +327,7 @@ static int mc_probe(struct device_d *dev, enum mc13xxx_mode mode)
 	rev = mc13xxx_query_revision(mc_dev);
 	if (rev < 0) {
 		free(mc_dev);
+		mc_dev = NULL;
 		return -EINVAL;
 	}
 

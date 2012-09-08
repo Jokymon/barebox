@@ -23,6 +23,7 @@
 #include <types.h>
 #include <driver.h>
 #include <init.h>
+#include <memory.h>
 #include <ns16550.h>
 #include <mach/hardware.h>
 #include <io.h>
@@ -30,12 +31,20 @@
 #include <sizes.h>
 #include <asm/common.h>
 
+static int malta_mem_init(void)
+{
+	barebox_add_memory_bank("ram0", 0xa0000000, SZ_256M);
+
+	return 0;
+}
+mem_initcall(malta_mem_init);
+
 static int malta_devices_init(void)
 {
 	add_cfi_flash_device(0, 0x1e000000, SZ_4M, 0);
 
-	devfs_add_partition("nor0", 0x0, SZ_512K, PARTITION_FIXED, "self");
-	devfs_add_partition("nor0", SZ_512K, SZ_64K, PARTITION_FIXED, "env0");
+	devfs_add_partition("nor0", 0x0, SZ_512K, DEVFS_PARTITION_FIXED, "self");
+	devfs_add_partition("nor0", SZ_512K, SZ_64K, DEVFS_PARTITION_FIXED, "env0");
 
 	return 0;
 }
@@ -49,7 +58,7 @@ static struct NS16550_plat serial_plat = {
 static int malta_console_init(void)
 {
 	/* Register the serial port */
-	add_ns16550_device(-1, DEBUG_LL_UART_ADDR, 8,
+	add_ns16550_device(DEVICE_ID_DYNAMIC, DEBUG_LL_UART_ADDR, 8,
 			IORESOURCE_MEM_8BIT, &serial_plat);
 
 	return 0;

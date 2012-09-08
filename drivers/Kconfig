@@ -12,10 +12,13 @@ source "drivers/video/Kconfig"
 source "drivers/mci/Kconfig"
 source "drivers/clk/Kconfig"
 source "drivers/mfd/Kconfig"
+source "drivers/misc/Kconfig"
 source "drivers/led/Kconfig"
 source "drivers/eeprom/Kconfig"
 source "drivers/input/Kconfig"
-
+source "drivers/watchdog/Kconfig"
 source "drivers/pwm/Kconfig"
+source "drivers/dma/Kconfig"
+source "drivers/gpio/Kconfig"
 
 endmenu

@@ -6,6 +6,10 @@ config COMMAND_SUPPORT
 	depends on !SHELL_NONE
 	default y
 
+config HAS_POWEROFF
+	bool
+	default n
+
 if COMMAND_SUPPORT
 
 menu "commands                      "
@@ -24,6 +28,10 @@ config CMD_EXEC
 config CMD_SLEEP
 	tristate
 	prompt "sleep"
+
+config CMD_MSLEEP
+	tristate
+	prompt "msleep"
 
 config CMD_SAVEENV
 	tristate
@@ -48,6 +56,10 @@ config CMD_PRINTENV
 config CMD_READLINE
 	tristate
 	prompt "readline"
+
+config CMD_LN
+	tristate
+	prompt "ln"
 
 config CMD_TRUE
 	tristate
@@ -112,6 +124,13 @@ config CMD_LINUX_EXEC
 	depends on LINUX
 	help
 	  This command executes a command on the Linux host.
+
+config CMD_GLOBAL
+	select GLOBALVAR
+	tristate
+	prompt "global"
+	help
+	  The global command allows to create global variables
 
 endmenu
 
@@ -190,6 +209,26 @@ config CMD_AUTOMOUNT
 	  directory is accessed for the first time. The script should then make
 	  this directory available (discover USB devices, bring network interface
 	  up and finally mount the filesystem).
+
+config CMD_BASENAME
+	tristate
+	prompt "basename"
+	help
+	  Strip directory and suffix from filenames and store the result in a
+	  environment variable
+
+config CMD_DIRNAME
+	tristate
+	prompt "dirname"
+	help
+	  Strip last component of file name and store the result in a
+	  environment variable
+
+config CMD_READLINK
+	tristate
+	prompt "readlink"
+	help
+	  read value of a symbolic link
 
 endmenu
 
@@ -320,8 +359,10 @@ config CMD_BOOTM
 	tristate
 	default y
 	select CRC32
+	select UIMAGE
 	select UNCOMPRESS
 	select FILETYPE
+	select GLOBALVAR
 	prompt "bootm"
 
 config CMD_BOOTM_SHOW_TYPE
@@ -367,6 +408,7 @@ config CMD_BOOTM_AIMAGE
 	  Support using Android Images.
 
 config CMD_UIMAGE
+	select UIMAGE
 	tristate
 	prompt "uimage"
 	help
@@ -374,7 +416,6 @@ config CMD_UIMAGE
 
 config CMD_BOOTZ
 	tristate
-	default y
 	depends on ARM
 	prompt "bootz"
 	help
@@ -389,6 +430,18 @@ config CMD_BOOTU
 	   compile in the 'bootu' command to start raw (uncompressed)
 	   Linux images
 
+config FLEXIBLE_BOOTARGS
+	bool
+	prompt "flexible Linux bootargs generation"
+	depends on CMD_GLOBAL
+	help
+	  Select this to get a more flexible bootargs generation. With this
+	  option the bootargs are concatenated together from global variables
+	  beginning with 'global.linux.bootargs.' and 'global.linux.mtdparts.'
+	  This allows for more flexible scripting since with it it's possible
+	  to replace parts of the bootargs string without reconstructing it
+	  completely
+
 config CMD_LINUX16
 	tristate
 	depends on X86
@@ -401,6 +454,11 @@ config CMD_LINUX16
 config CMD_RESET
 	tristate
 	prompt "reset"
+
+config CMD_POWEROFF
+	tristate
+	depends on HAS_POWEROFF
+	prompt "poweroff"
 
 config CMD_GO
 	tristate
@@ -531,6 +589,25 @@ config CMD_USB
 	default y
 	help
 	  The usb command allows to rescan for USB devices.
+
+menuconfig CMD_WD
+	bool
+	depends on WATCHDOG
+	prompt "wd command                    "
+	help
+	  The 'wd' command which allows to start, stop and trigger the onboard
+	  watchdog.
+
+if CMD_WD
+
+config CMD_WD_DEFAULT_TIMOUT
+	int
+	prompt "default timeout"
+	help
+	  Define the default timeout value in [seconds] if the first call of
+	  'wd' is done without a timeout value (which means the watchdog gets
+	  enabled and re-triggered with the default timeout value).
+endif
 
 endmenu
 

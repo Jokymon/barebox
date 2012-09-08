@@ -146,20 +146,17 @@ clear_iomux:
 	bhs	ret
 
 	/* Move ourselves out of NFC SRAM */
-	ldr	r1, =TEXT_BASE
+	ldr	r1, =_text
 
 copy_loop:
 	ldmia	r0!, {r3-r9}		/* copy from source address [r0]    */
 	stmia	r1!, {r3-r9}		/* copy to   target address [r1]    */
-	cmp	r0, r2			/* until source end addreee [r2]    */
+	cmp	r0, r2			/* until source end address [r2]    */
 	ble	copy_loop
 
 	ldr	pc, =1f			/* Jump to SDRAM                    */
 1:
-	bl	nand_boot		/* Load barebox from NAND Flash      */
-
-	ldr	r1, =IMX_NFC_BASE - TEXT_BASE
-	sub	r10, r10, r1		/* adjust return address from NFC SRAM */
+	b	nand_boot		/* Load barebox from NAND Flash      */
 ret:
 #endif /* CONFIG_NAND_IMX_BOOT */
 

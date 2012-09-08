@@ -2,6 +2,7 @@
 #define __FS_H
 
 #include <driver.h>
+#include <filetype.h>
 
 #define PATH_MAX       1024        /* include/linux/limits.h */
 
@@ -23,8 +24,9 @@ typedef struct dir {
 
 typedef struct filep {
 	struct device_d *dev; /* The device this FILE belongs to              */
-	ulong pos;            /* current position in stream                   */
-	ulong size;           /* The size of this inode                       */
+	loff_t pos;            /* current position in stream                   */
+#define FILE_SIZE_STREAM	((loff_t) -1)
+	loff_t size;           /* The size of this inode                       */
 	ulong flags;          /* the O_* flags from open                      */
 
 	void *inode;         /* private to the filesystem driver              */
@@ -49,12 +51,17 @@ struct fs_driver_d {
 	/* Truncate a file to given size */
 	int (*truncate)(struct device_d *dev, FILE *f, ulong size);
 
+	int (*symlink)(struct device_d *dev, const char *pathname,
+		       const char *newpath);
+	int (*readlink)(struct device_d *dev, const char *pathname, char *name,
+			size_t size);
+
 	int (*open)(struct device_d *dev, FILE *f, const char *pathname);
 	int (*close)(struct device_d *dev, FILE *f);
 	int (*read)(struct device_d *dev, FILE *f, void *buf, size_t size);
 	int (*write)(struct device_d *dev, FILE *f, const void *buf, size_t size);
 	int (*flush)(struct device_d *dev, FILE *f);
-	off_t (*lseek)(struct device_d *dev, FILE *f, off_t pos);
+	loff_t (*lseek)(struct device_d *dev, FILE *f, loff_t pos);
 
 	struct dir* (*opendir)(struct device_d *dev, const char *pathname);
 	struct dirent* (*readdir)(struct device_d *dev, struct dir *dir);
@@ -63,13 +70,15 @@ struct fs_driver_d {
 
 	int (*ioctl)(struct device_d *dev, FILE *f, int request, void *buf);
 	int (*erase)(struct device_d *dev, FILE *f, size_t count,
-			unsigned long offset);
+			loff_t offset);
 	int (*protect)(struct device_d *dev, FILE *f, size_t count,
-			unsigned long offset, int prot);
+			loff_t offset, int prot);
 
 	int (*memmap)(struct device_d *dev, FILE *f, void **map, int flags);
 
 	struct driver_d drv;
+
+	enum filetype type;
 
 	unsigned long flags;
 };
@@ -92,6 +101,8 @@ struct fs_device_d {
 	struct list_head list;
 };
 
+#define drv_to_fs_driver(d) container_of(d, struct fs_driver_d, drv)
+
 /*
  * standard posix file functions
  */
@@ -100,6 +111,7 @@ int creat(const char *pathname, mode_t mode);
 int unlink(const char *pathname);
 int close(int fd);
 int flush(int fd);
+int lstat(const char *filename, struct stat *s);
 int stat(const char *filename, struct stat *s);
 int read(int fd, void *buf, size_t count);
 int ioctl(int fd, int request, void *buf);
@@ -109,7 +121,7 @@ ssize_t write(int fd, const void *buf, size_t count);
 #define SEEK_CUR	2
 #define SEEK_END	3
 
-off_t lseek(int fildes, off_t offset, int whence);
+loff_t lseek(int fildes, loff_t offset, int whence);
 int mkdir (const char *pathname, mode_t mode);
 
 /* Create a directory and its parents */
@@ -122,6 +134,9 @@ int chdir(const char *pathname);
 DIR *opendir(const char *pathname);
 struct dirent *readdir(DIR *dir);
 int closedir(DIR *dir);
+
+int symlink(const char *pathname, const char *newpath);
+int readlink(const char *path, char *buf, size_t bufsiz);
 
 int mount (const char *device, const char *fsname, const char *path);
 int umount(const char *pathname);
@@ -156,6 +171,9 @@ void *read_file(const char *filename, size_t *size);
  * of "..", "." and double slashes. The returned string must be freed wit free().
  */
 char *normalise_path(const char *path);
+char *normalise_link(const char *pathname, const char* symlink);
+
+char *get_mounted_path(const char *path);
 
 /* Register a new filesystem driver */
 int register_fs_driver(struct fs_driver_d *fsdrv);

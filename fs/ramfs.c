@@ -42,12 +42,17 @@ struct ramfs_inode {
 	struct ramfs_inode *parent;
 	struct ramfs_inode *next;
 	struct ramfs_inode *child;
+	char *symlink;
 	ulong mode;
 
 	struct handle_d *handle;
 
 	ulong size;
 	struct ramfs_chunk *data;
+
+	/* Points to recently used chunk */
+	int recent_chunk;
+	struct ramfs_chunk *recent_chunkp;
 };
 
 struct ramfs_priv {
@@ -172,6 +177,7 @@ static void ramfs_put_inode(struct ramfs_inode *node)
 		data = tmp;
 	}
 
+	free(node->symlink);
 	free(node->name);
 	free(node);
 }
@@ -208,18 +214,38 @@ static struct ramfs_inode* node_insert(struct ramfs_inode *parent_node, const ch
 
 /* ---------------------------------------------------------------*/
 
-static int ramfs_create(struct device_d *dev, const char *pathname, mode_t mode)
+static int __ramfs_create(struct device_d *dev, const char *pathname,
+			  mode_t mode, const char *symlink)
 {
 	struct ramfs_priv *priv = dev->priv;
 	struct ramfs_inode *node;
 	char *file;
+	char *__symlink = NULL;
 
 	node = rlookup_parent(priv, pathname, &file);
-	if (node) {
-		node_insert(node, file, mode);
-		return 0;
+	if (!node)
+		return -ENOENT;
+
+	if (symlink) {
+		__symlink = strdup(symlink);
+		if (!__symlink)
+			return -ENOMEM;
 	}
-	return -ENOENT;
+
+	node = node_insert(node, file, mode);
+	if (!node) {
+		free(__symlink);
+		return -ENOMEM;
+	}
+
+	node->symlink = __symlink;
+
+	return 0;
+}
+
+static int ramfs_create(struct device_d *dev, const char *pathname, mode_t mode)
+{
+	return __ramfs_create(dev, pathname, mode, NULL);
 }
 
 static int ramfs_unlink(struct device_d *dev, const char *pathname)
@@ -297,6 +323,35 @@ static int ramfs_close(struct device_d *dev, FILE *f)
 	return 0;
 }
 
+static struct ramfs_chunk *ramfs_find_chunk(struct ramfs_inode *node, int chunk)
+{
+	struct ramfs_chunk *data;
+	int left = chunk;
+
+	if (chunk == 0)
+		return node->data;
+
+	if (node->recent_chunk == chunk)
+		return node->recent_chunkp;
+
+	if (node->recent_chunk < chunk && node->recent_chunk != 0) {
+		/* Start at last known chunk */
+		data = node->recent_chunkp;
+		left -= node->recent_chunk;
+	} else {
+		/* Start at first chunk */
+		data = node->data;
+	}
+
+	while (left--)
+		data = data->next;
+
+	node->recent_chunkp = data;
+	node->recent_chunk = chunk;
+
+	return data;
+}
+
 static int ramfs_read(struct device_d *_dev, FILE *f, void *buf, size_t insize)
 {
 	struct ramfs_inode *node = (struct ramfs_inode *)f->inode;
@@ -311,11 +366,7 @@ static int ramfs_read(struct device_d *_dev, FILE *f, void *buf, size_t insize)
 	debug("%s: reading from chunk %d\n", __FUNCTION__, chunk);
 
 	/* Position ourself in stream */
-	data = node->data;
-	while (chunk) {
-		data = data->next;
-		chunk--;
-	}
+	data = ramfs_find_chunk(node, chunk);
 	ofs = f->pos % CHUNK_SIZE;
 
 	/* Read till end of current chunk */
@@ -364,11 +415,7 @@ static int ramfs_write(struct device_d *_dev, FILE *f, const void *buf, size_t i
 	debug("%s: writing to chunk %d\n", __FUNCTION__, chunk);
 
 	/* Position ourself in stream */
-	data = node->data;
-	while (chunk) {
-		data = data->next;
-		chunk--;
-	}
+	data = ramfs_find_chunk(node, chunk);
 	ofs = f->pos % CHUNK_SIZE;
 
 	/* Write till end of current chunk */
@@ -403,7 +450,7 @@ static int ramfs_write(struct device_d *_dev, FILE *f, const void *buf, size_t i
 	return insize;
 }
 
-static off_t ramfs_lseek(struct device_d *dev, FILE *f, off_t pos)
+static loff_t ramfs_lseek(struct device_d *dev, FILE *f, loff_t pos)
 {
 	f->pos = pos;
 	return f->pos;
@@ -429,6 +476,8 @@ static int ramfs_truncate(struct device_d *dev, FILE *f, ulong size)
 			ramfs_put_chunk(data);
 			data = tmp;
 		}
+		if (node->recent_chunk > newchunks)
+			node->recent_chunk = 0;
 	}
 
 	if (newchunks > oldchunks) {
@@ -505,8 +554,33 @@ static int ramfs_stat(struct device_d *dev, const char *filename, struct stat *s
 	if (!node)
 		return -ENOENT;
 
-	s->st_size = node->size;
+	s->st_size = node->symlink ? strlen(node->symlink) : node->size;
 	s->st_mode = node->mode;
+
+	return 0;
+}
+
+static int ramfs_symlink(struct device_d *dev, const char *pathname,
+		       const char *newpath)
+{
+	mode_t mode = S_IFLNK | S_IRWXU | S_IRWXG | S_IRWXO;
+
+	return __ramfs_create(dev, newpath, mode, pathname);
+}
+
+static int ramfs_readlink(struct device_d *dev, const char *pathname,
+			char *buf, size_t bufsiz)
+{
+	struct ramfs_priv *priv = dev->priv;
+	struct ramfs_inode *node = rlookup(priv, pathname);
+	int len;
+
+	if (!node || !node->symlink)
+		return -ENOENT;
+
+	len = min(bufsiz, strlen(node->symlink));
+
+	memcpy(buf, node->symlink, len);
 
 	return 0;
 }
@@ -557,6 +631,8 @@ static struct fs_driver_d ramfs_driver = {
 	.readdir   = ramfs_readdir,
 	.closedir  = ramfs_closedir,
 	.stat      = ramfs_stat,
+	.symlink   = ramfs_symlink,
+	.readlink  = ramfs_readlink,
 	.flags     = FS_DRIVER_NO_DEV,
 	.drv = {
 		.probe  = ramfs_probe,

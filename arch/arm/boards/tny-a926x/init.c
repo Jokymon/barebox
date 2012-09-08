@@ -89,7 +89,7 @@ static struct sam9_smc_config tny_a9g20_nand_smc_config = {
 	.ncs_read_pulse		= 4,
 	.nrd_pulse		= 4,
 	.ncs_write_pulse	= 4,
-	.nwe_pulse		= 2,
+	.nwe_pulse		= 4,
 
 	.read_cycle		= 7,
 	.write_cycle		= 7,
@@ -171,7 +171,7 @@ static void __init ek_add_device_udc(void)
 
 static int tny_a9260_mem_init(void)
 {
-	at91_add_device_sdram(64 * 1024 * 1024);
+	at91_add_device_sdram(0);
 
 	return 0;
 }
@@ -192,13 +192,13 @@ static int tny_a9260_devices_init(void)
 		at91_add_device_spi(0, &spi_pdata);
 	}
 
-	devfs_add_partition("nand0", 0x00000, SZ_128K, PARTITION_FIXED, "at91bootstrap_raw");
+	devfs_add_partition("nand0", 0x00000, SZ_128K, DEVFS_PARTITION_FIXED, "at91bootstrap_raw");
 	dev_add_bb_dev("at91bootstrap_raw", "at91bootstrap");
-	devfs_add_partition("nand0", SZ_128K, SZ_256K, PARTITION_FIXED, "self_raw");
+	devfs_add_partition("nand0", SZ_128K, SZ_256K, DEVFS_PARTITION_FIXED, "self_raw");
 	dev_add_bb_dev("self_raw", "self0");
-	devfs_add_partition("nand0", SZ_256K + SZ_128K, SZ_128K, PARTITION_FIXED, "env_raw");
+	devfs_add_partition("nand0", SZ_256K + SZ_128K, SZ_128K, DEVFS_PARTITION_FIXED, "env_raw");
 	dev_add_bb_dev("env_raw", "env0");
-	devfs_add_partition("nand0", SZ_512K, SZ_128K, PARTITION_FIXED, "env_raw1");
+	devfs_add_partition("nand0", SZ_512K, SZ_128K, DEVFS_PARTITION_FIXED, "env_raw1");
 	dev_add_bb_dev("env_raw1", "env1");
 
 	return 0;

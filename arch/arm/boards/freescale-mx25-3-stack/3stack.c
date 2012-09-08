@@ -28,6 +28,7 @@
 #include <mach/imx-regs.h>
 #include <asm/armlinux.h>
 #include <asm-generic/sections.h>
+#include <asm/barebox-arm.h>
 #include <mach/gpio.h>
 #include <io.h>
 #include <partition.h>
@@ -44,8 +45,6 @@
 #include <mfd/mc34704.h>
 #include <mach/devices-imx25.h>
 #include <asm/barebox-arm-head.h>
-
-extern void exception_vectors(void);
 
 void __naked __flash_header_start go(void)
 {
@@ -95,7 +94,7 @@ struct imx_dcd_entry __dcd_entry_section dcd_entry[] = {
 };
 
 struct imx_flash_header __flash_header_section flash_header = {
-	.app_code_jump_vector	= DEST_BASE + ((unsigned int)&exception_vectors - TEXT_BASE),
+	.app_code_jump_vector	= DEST_BASE + 0x1000,
 	.app_code_barker	= APP_CODE_BARKER,
 	.app_code_csf		= 0,
 	.dcd_ptr_ptr		= FLASH_HEADER_BASE + offsetof(struct imx_flash_header, dcd),
@@ -214,7 +213,7 @@ static int imx25_devices_init(void)
 	 * the CPLD has to be initialized.
 	 */
 	imx25_usb_init();
-	add_generic_usb_ehci_device(-1, IMX_OTG_BASE + 0x400, NULL);
+	add_generic_usb_ehci_device(DEVICE_ID_DYNAMIC, IMX_OTG_BASE + 0x400, NULL);
 #endif
 
 	imx25_iim_register_fec_ethaddr();
@@ -225,10 +224,10 @@ static int imx25_devices_init(void)
 
 	imx25_add_nand(&nand_info);
 
-	devfs_add_partition("nand0", 0x00000, 0x40000, PARTITION_FIXED, "self_raw");
+	devfs_add_partition("nand0", 0x00000, 0x40000, DEVFS_PARTITION_FIXED, "self_raw");
 	dev_add_bb_dev("self_raw", "self0");
 
-	devfs_add_partition("nand0", 0x40000, 0x20000, PARTITION_FIXED, "env_raw");
+	devfs_add_partition("nand0", 0x40000, 0x20000, DEVFS_PARTITION_FIXED, "env_raw");
 	dev_add_bb_dev("env_raw", "env0");
 
 	i2c_register_board_info(0, i2c_devices, ARRAY_SIZE(i2c_devices));
@@ -296,7 +295,8 @@ console_initcall(imx25_console_init);
 #ifdef CONFIG_NAND_IMX_BOOT
 void __bare_init nand_boot(void)
 {
-	imx_nand_load_image((void *)TEXT_BASE, barebox_image_size);
+	imx_nand_load_image(_text, barebox_image_size);
+	board_init_lowlevel_return();
 }
 #endif
 

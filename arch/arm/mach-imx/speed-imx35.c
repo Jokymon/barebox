@@ -16,6 +16,7 @@
  */
 
 #include <common.h>
+#include <asm-generic/errno.h>
 #include <mach/imx-regs.h>
 #include <io.h>
 #include <mach/clock.h>
@@ -84,7 +85,7 @@ unsigned long imx_get_ahbclk(void)
 	return fref / aad->ahb;
 }
 
-static unsigned long imx_get_ipgclk(void)
+unsigned long imx_get_ipgclk(void)
 {
 	ulong clk = imx_get_ahbclk();
 
@@ -94,6 +95,11 @@ static unsigned long imx_get_ipgclk(void)
 static unsigned long get_3_3_div(unsigned long in)
 {
 	return (((in >> 3) & 0x7) + 1) * ((in & 0x7) + 1);
+}
+
+static unsigned long get_6_div(unsigned long in)
+{
+	return ((in & 0x3f) + 1);
 }
 
 static unsigned long imx_get_ipg_perclk(void)
@@ -164,10 +170,11 @@ unsigned long imx_get_uartclk(void)
 		return imx_get_ppllclk() / div;
 }
 
+/* mmc0 clk only */
 unsigned long imx_get_mmcclk(void)
 {
 	unsigned long pdr3 = readl(IMX_CCM_BASE + CCM_PDR3);
-	unsigned long div = get_3_3_div(pdr3);
+	unsigned long div = get_6_div(pdr3);
 
 	if (pdr3 & (1 << 6))
 		return imx_get_armclk() / div;
@@ -180,9 +187,14 @@ ulong imx_get_fecclk(void)
 	return imx_get_ipgclk();
 }
 
-ulong imx_get_i2cclk(void)
+ulong fsl_get_i2cclk(void)
 {
 	return imx_get_ipg_perclk();
+}
+
+unsigned long imx_get_cspiclk(void)
+{
+	return imx_get_ipgclk();
 }
 
 void imx_dump_clocks(void)
@@ -203,9 +215,12 @@ void imx_dump_clocks(void)
  * the new divider (which may be smaller
  * than the desired one)
  */
-int imx_clko_set_div(int div)
+int imx_clko_set_div(int num, int div)
 {
 	unsigned long cosr = readl(IMX_CCM_BASE + CCM_COSR);
+
+	if (num != 1)
+		return -ENODEV;
 
 	div -= 1;
 	div &= 0x3f;
@@ -221,9 +236,12 @@ int imx_clko_set_div(int div)
 /*
  * Set the clock source for the CLKO pin
  */
-void imx_clko_set_src(int src)
+void imx_clko_set_src(int num, int src)
 {
 	unsigned long cosr = readl(IMX_CCM_BASE + CCM_COSR);
+
+	if (num != 1)
+		return;
 
 	if (src < 0) {
 		cosr &= ~(1 << 5);

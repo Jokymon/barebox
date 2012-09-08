@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <malloc.h>
 #include <linux/stat.h>
+#include <linux/err.h>
 #include <fcntl.h>
 #include <xfuncs.h>
 #include <init.h>
@@ -33,6 +34,7 @@
 #include <libbb.h>
 #include <magicvar.h>
 #include <environment.h>
+#include <libgen.h>
 
 void *read_file(const char *filename, size_t *size)
 {
@@ -110,6 +112,61 @@ static int init_cwd(void)
 
 postcore_initcall(init_cwd);
 
+char *normalise_link(const char *pathname, const char *symlink)
+{
+	const char *buf = symlink;
+	char *path_free, *path;
+	char *absolute_path;
+	int point = 0;
+	int dir = 1;
+	int len;
+
+	if (symlink[0] == '/')
+		return strdup(symlink);
+
+	while (*buf == '.' || *buf == '/') {
+		if (*buf == '.') {
+			point++;
+		} else if (*buf == '/') {
+			point = 0;
+			dir++;
+		}
+		if (point > 2) {
+			buf -= 2;
+			break;
+		}
+		buf++;
+	}
+
+	path = path_free = strdup(pathname);
+	if (!path)
+		return NULL;
+
+	while(dir) {
+		path = dirname(path);
+		dir--;
+	}
+
+	len = strlen(buf) + strlen(path) + 1;
+	if (buf[0] != '/')
+		len++;
+
+	absolute_path = calloc(sizeof(char), len);
+
+	if (!absolute_path)
+		goto out;
+
+	strcat(absolute_path, path);
+	if (buf[0] != '/')
+		strcat(absolute_path, "/");
+	strcat(absolute_path, buf);
+
+out:
+	free(path_free);
+
+	return absolute_path;
+}
+
 char *normalise_path(const char *pathname)
 {
 	char *path = xzalloc(strlen(pathname) + strlen(cwd) + 2);
@@ -186,6 +243,15 @@ static struct fs_device_d *get_fsdevice_by_path(const char *path)
 	return fs_dev_root;
 }
 
+char *get_mounted_path(const char *path)
+{
+	struct fs_device_d *fdev;
+
+	fdev = get_fsdevice_by_path(path);
+
+	return fdev->path;
+}
+
 static FILE files[MAX_FILES];
 
 static FILE *get_file(void)
@@ -211,8 +277,8 @@ static void put_file(FILE *f)
 static int check_fd(int fd)
 {
 	if (fd < 0 || fd >= MAX_FILES || !files[fd].in_use) {
-		errno = -EBADF;
-		return errno;
+		errno = EBADF;
+		return -errno;
 	}
 
 	return 0;
@@ -361,7 +427,7 @@ static int dir_is_empty(const char *pathname)
 
 	dir = opendir(pathname);
 	if (!dir) {
-		errno = -ENOENT;
+		errno = ENOENT;
 		return -ENOENT;
 	}
 
@@ -389,47 +455,61 @@ static int path_check_prereq(const char *path, unsigned int flags)
 {
 	struct stat s;
 	unsigned int m;
+	int ret = 0;
 
-	errno = 0;
-
-	if (stat(path, &s)) {
-		if (flags & S_UB_DOES_NOT_EXIST) {
-			errno = 0;
+	if (lstat(path, &s)) {
+		if (flags & S_UB_DOES_NOT_EXIST)
 			goto out;
-		}
-		errno = -ENOENT;
+		ret = -ENOENT;
 		goto out;
 	}
 
 	if (flags & S_UB_DOES_NOT_EXIST) {
-		errno = -EEXIST;
+		ret = -EEXIST;
 		goto out;
 	}
 
-	if (flags == S_UB_EXISTS) {
-		errno = 0;
+	if (flags == S_UB_EXISTS)
 		goto out;
-	}
 
 	m = s.st_mode;
 
 	if (S_ISDIR(m)) {
 		if (flags & S_IFREG) {
-			errno = -EISDIR;
+			ret = -EISDIR;
 			goto out;
 		}
 		if ((flags & S_UB_IS_EMPTY) && !dir_is_empty(path)) {
-			errno = -ENOTEMPTY;
+			ret = -ENOTEMPTY;
 			goto out;
 		}
 	}
 	if ((flags & S_IFDIR) && S_ISREG(m)) {
-		errno = -ENOTDIR;
+		ret = -ENOTDIR;
 		goto out;
 	}
 
 out:
-	return errno;
+	return ret;
+}
+
+static int parent_check_directory(const char *path)
+{
+	struct stat s;
+	int ret;
+	char *dir = dirname(xstrdup(path));
+
+	ret = lstat(dir, &s);
+
+	free(dir);
+
+	if (ret)
+		return -ENOENT;
+
+	if (!S_ISDIR(s.st_mode))
+		return -ENOTDIR;
+
+	return 0;
 }
 
 const char *getcwd(void)
@@ -441,9 +521,11 @@ EXPORT_SYMBOL(getcwd);
 int chdir(const char *pathname)
 {
 	char *p = normalise_path(pathname);
-	errno = 0;
+	int ret;
 
-	if (path_check_prereq(p, S_IFDIR))
+
+	ret = path_check_prereq(p, S_IFDIR);
+	if (ret)
 		goto out;
 
 	strcpy(cwd, p);
@@ -451,7 +533,10 @@ int chdir(const char *pathname)
 out:
 	free(p);
 
-	return errno;
+	if (ret)
+		errno = -ret;
+
+	return ret;
 }
 EXPORT_SYMBOL(chdir);
 
@@ -461,58 +546,120 @@ int unlink(const char *pathname)
 	struct fs_driver_d *fsdrv;
 	char *p = normalise_path(pathname);
 	char *freep = p;
+	int ret;
 
-	if (path_check_prereq(pathname, S_IFREG))
-		goto out;
-
-	fsdev = get_fs_device_and_root_path(&p);
-	if (!fsdev)
-		goto out;
-	fsdrv = fsdev->driver;
-
-	if (!fsdrv->unlink) {
-		errno = -ENOSYS;
+	ret = path_check_prereq(pathname, S_IFREG);
+	if (ret) {
+		ret = -EINVAL;
 		goto out;
 	}
 
-	errno = fsdrv->unlink(&fsdev->dev, p);
+	fsdev = get_fs_device_and_root_path(&p);
+	if (!fsdev) {
+		ret = -ENOENT;
+		goto out;
+	}
+	fsdrv = fsdev->driver;
+
+	if (!fsdrv->unlink) {
+		ret = -ENOSYS;
+		goto out;
+	}
+
+	ret = fsdrv->unlink(&fsdev->dev, p);
+	if (ret)
+		errno = -ret;
 out:
 	free(freep);
-	return errno;
+	if (ret)
+		errno = -ret;
+	return ret;
 }
 EXPORT_SYMBOL(unlink);
+
+static char *realfile(const char *pathname, struct stat *s)
+{
+	char *path = normalise_path(pathname);
+	int ret;
+
+	ret = lstat(path, s);
+	if (ret)
+		goto out;
+
+	if (S_ISLNK(s->st_mode)) {
+		char tmp[PATH_MAX];
+		char *new_path;
+
+		memset(tmp, 0, PATH_MAX);
+
+		ret = readlink(path, tmp, PATH_MAX - 1);
+		if (ret < 0)
+			goto out;
+
+		new_path = normalise_link(path, tmp);
+		free(path);
+		if (!new_path)
+			return ERR_PTR(-ENOMEM);
+		path = new_path;
+
+		ret = lstat(path, s);
+	}
+
+	if (!ret)
+		return path;
+
+out:
+	free(path);
+	return ERR_PTR(ret);
+}
 
 int open(const char *pathname, int flags, ...)
 {
 	struct fs_device_d *fsdev;
 	struct fs_driver_d *fsdrv;
 	FILE *f;
-	int exist_err;
+	int exist_err = 0;
 	struct stat s;
-	char *path = normalise_path(pathname);
-	char *freep = path;
+	char *path;
+	char *freep;
+	int ret;
 
-	exist_err = stat(path, &s);
+	path = realfile(pathname, &s);
+
+	if (IS_ERR(path)) {
+		exist_err = PTR_ERR(path);
+		path = normalise_path(pathname);
+	}
+
+	freep = path;
 
 	if (!exist_err && S_ISDIR(s.st_mode)) {
-		errno = -EISDIR;
+		ret = -EISDIR;
 		goto out1;
 	}
 
 	if (exist_err && !(flags & O_CREAT)) {
-		errno = exist_err;
+		ret = exist_err;
 		goto out1;
+	}
+
+	if (exist_err) {
+		ret = parent_check_directory(path);
+		if (ret)
+			goto out1;
 	}
 
 	f = get_file();
 	if (!f) {
-		errno = -EMFILE;
+		ret = -EMFILE;
 		goto out1;
 	}
 
 	fsdev = get_fs_device_and_root_path(&path);
-	if (!fsdev)
+	if (!fsdev) {
+		ret = -ENOENT;
 		goto out;
+	}
 
 	fsdrv = fsdev->driver;
 
@@ -520,28 +667,28 @@ int open(const char *pathname, int flags, ...)
 	f->flags = flags;
 
 	if ((flags & O_ACCMODE) && !fsdrv->write) {
-		errno = -EROFS;
+		ret = -EROFS;
 		goto out;
 	}
 
 	if (exist_err) {
 		if (NULL != fsdrv->create)
-			errno = fsdrv->create(&fsdev->dev, path,
+			ret = fsdrv->create(&fsdev->dev, path,
 					S_IFREG | S_IRWXU | S_IRWXG | S_IRWXO);
 		else
-			errno = -EROFS;
-		if (errno)
+			ret = -EROFS;
+		if (ret)
 			goto out;
 	}
-	errno = fsdrv->open(&fsdev->dev, f, path);
-	if (errno)
+	ret = fsdrv->open(&fsdev->dev, f, path);
+	if (ret)
 		goto out;
 
 
 	if (flags & O_TRUNC) {
-		errno = fsdrv->truncate(&fsdev->dev, f, 0);
+		ret = fsdrv->truncate(&fsdev->dev, f, 0);
 		f->size = 0;
-		if (errno)
+		if (ret)
 			goto out;
 	}
 
@@ -555,7 +702,9 @@ out:
 	put_file(f);
 out1:
 	free(freep);
-	return errno;
+	if (ret)
+		errno = -ret;
+	return ret;
 }
 EXPORT_SYMBOL(open);
 
@@ -570,19 +719,22 @@ int ioctl(int fd, int request, void *buf)
 	struct device_d *dev;
 	struct fs_driver_d *fsdrv;
 	FILE *f = &files[fd];
+	int ret;
 
 	if (check_fd(fd))
-		return errno;
+		return -errno;
 
 	dev = f->dev;
 
 	fsdrv = dev_to_fs_driver(dev);
 
 	if (fsdrv->ioctl)
-		errno = fsdrv->ioctl(dev, f, request, buf);
+		ret = fsdrv->ioctl(dev, f, request, buf);
 	else
-		errno = -ENOSYS;
-	return errno;
+		ret = -ENOSYS;
+	if (ret)
+		errno = -ret;
+	return ret;
 }
 
 int read(int fd, void *buf, size_t count)
@@ -590,25 +742,28 @@ int read(int fd, void *buf, size_t count)
 	struct device_d *dev;
 	struct fs_driver_d *fsdrv;
 	FILE *f = &files[fd];
+	int ret;
 
 	if (check_fd(fd))
-		return errno;
+		return -errno;
 
 	dev = f->dev;
 
 	fsdrv = dev_to_fs_driver(dev);
 
-	if (f->pos + count > f->size)
+	if (f->size != FILE_SIZE_STREAM && f->pos + count > f->size)
 		count = f->size - f->pos;
 
 	if (!count)
 		return 0;
 
-	errno = fsdrv->read(dev, f, buf, count);
+	ret = fsdrv->read(dev, f, buf, count);
 
-	if (errno > 0)
-		f->pos += errno;
-	return errno;
+	if (ret > 0)
+		f->pos += ret;
+	if (ret < 0)
+		errno = -ret;
+	return ret;
 }
 EXPORT_SYMBOL(read);
 
@@ -617,30 +772,33 @@ ssize_t write(int fd, const void *buf, size_t count)
 	struct device_d *dev;
 	struct fs_driver_d *fsdrv;
 	FILE *f = &files[fd];
+	int ret;
 
 	if (check_fd(fd))
-		return errno;
+		return -errno;
 
 	dev = f->dev;
 
 	fsdrv = dev_to_fs_driver(dev);
-	if (f->pos + count > f->size) {
-		errno = fsdrv->truncate(dev, f, f->pos + count);
-		if (errno) {
-			if (errno != -ENOSPC)
-				return errno;
+	if (f->size != FILE_SIZE_STREAM && f->pos + count > f->size) {
+		ret = fsdrv->truncate(dev, f, f->pos + count);
+		if (ret) {
+			if (ret != -ENOSPC)
+				goto out;
 			count = f->size - f->pos;
 			if (!count)
-				return errno;
+				goto out;
 		} else {
 			f->size = f->pos + count;
 		}
 	}
-	errno = fsdrv->write(dev, f, buf, count);
-
-	if (errno > 0)
-		f->pos += errno;
-	return errno;
+	ret = fsdrv->write(dev, f, buf, count);
+	if (ret > 0)
+		f->pos += ret;
+out:
+	if (ret < 0)
+		errno = -ret;
+	return ret;
 }
 EXPORT_SYMBOL(write);
 
@@ -649,48 +807,53 @@ int flush(int fd)
 	struct device_d *dev;
 	struct fs_driver_d *fsdrv;
 	FILE *f = &files[fd];
+	int ret;
 
 	if (check_fd(fd))
-		return errno;
+		return -errno;
 
 	dev = f->dev;
 
 	fsdrv = dev_to_fs_driver(dev);
 	if (fsdrv->flush)
-		errno = fsdrv->flush(dev, f);
+		ret = fsdrv->flush(dev, f);
 	else
-		errno = 0;
+		ret = 0;
 
-	return errno;
+	if (ret)
+		errno = -ret;
+
+	return ret;
 }
 
-off_t lseek(int fildes, off_t offset, int whence)
+loff_t lseek(int fildes, loff_t offset, int whence)
 {
 	struct device_d *dev;
 	struct fs_driver_d *fsdrv;
 	FILE *f = &files[fildes];
-	off_t pos;
+	loff_t pos;
+	int ret;
 
 	if (check_fd(fildes))
 		return -1;
 
-	errno = 0;
-
 	dev = f->dev;
 	fsdrv = dev_to_fs_driver(dev);
 	if (!fsdrv->lseek) {
-		errno = -ENOSYS;
-		return -1;
+		ret = -ENOSYS;
+		goto out;
 	}
 
-	switch(whence) {
+	ret = -EINVAL;
+
+	switch (whence) {
 	case SEEK_SET:
-		if (offset > f->size)
+		if (f->size != FILE_SIZE_STREAM && offset > f->size)
 			goto out;
 		pos = offset;
 		break;
 	case SEEK_CUR:
-		if (offset + f->pos > f->size)
+		if (f->size != FILE_SIZE_STREAM && offset + f->pos > f->size)
 			goto out;
 		pos = f->pos + offset;
 		break;
@@ -706,7 +869,9 @@ off_t lseek(int fildes, off_t offset, int whence)
 	return fsdrv->lseek(dev, f, pos);
 
 out:
-	errno = -EINVAL;
+	if (ret)
+		errno = -ret;
+
 	return -1;
 }
 EXPORT_SYMBOL(lseek);
@@ -716,23 +881,26 @@ int erase(int fd, size_t count, unsigned long offset)
 	struct device_d *dev;
 	struct fs_driver_d *fsdrv;
 	FILE *f = &files[fd];
+	int ret;
 
 	if (check_fd(fd))
-		return errno;
+		return -errno;
+	if (offset >= f->size)
+		return 0;
+	if (count > f->size - offset)
+		count = f->size - offset;
 
 	dev = f->dev;
-
 	fsdrv = dev_to_fs_driver(dev);
-
-	if (f->pos + count > f->size)
-		count = f->size - f->pos;
-
 	if (fsdrv->erase)
-		errno = fsdrv->erase(dev, f, count, offset);
+		ret = fsdrv->erase(dev, f, count, offset);
 	else
-		errno = -ENOSYS;
+		ret = -ENOSYS;
 
-	return errno;
+	if (ret)
+		errno = -ret;
+
+	return ret;
 }
 EXPORT_SYMBOL(erase);
 
@@ -741,23 +909,26 @@ int protect(int fd, size_t count, unsigned long offset, int prot)
 	struct device_d *dev;
 	struct fs_driver_d *fsdrv;
 	FILE *f = &files[fd];
+	int ret;
 
 	if (check_fd(fd))
-		return errno;
+		return -errno;
+	if (offset >= f->size)
+		return 0;
+	if (count > f->size - offset)
+		count = f->size - offset;
 
 	dev = f->dev;
-
 	fsdrv = dev_to_fs_driver(dev);
-
-	if (f->pos + count > f->size)
-		count = f->size - f->pos;
-
 	if (fsdrv->protect)
-		errno = fsdrv->protect(dev, f, count, offset, prot);
+		ret = fsdrv->protect(dev, f, count, offset, prot);
 	else
-		errno = -ENOSYS;
+		ret = -ENOSYS;
 
-	return errno;
+	if (ret)
+		errno = -ret;
+
+	return ret;
 }
 EXPORT_SYMBOL(protect);
 
@@ -781,21 +952,25 @@ void *memmap(int fd, int flags)
 	struct device_d *dev;
 	struct fs_driver_d *fsdrv;
 	FILE *f = &files[fd];
-	void *ret = (void *)-1;
+	void *retp = (void *)-1;
+	int ret;
 
 	if (check_fd(fd))
-		return ret;
+		return retp;
 
 	dev = f->dev;
 
 	fsdrv = dev_to_fs_driver(dev);
 
 	if (fsdrv->memmap)
-		errno = fsdrv->memmap(dev, f, &ret, flags);
+		ret = fsdrv->memmap(dev, f, &retp, flags);
 	else
-		errno = -EINVAL;
+		ret = -EINVAL;
 
-	return ret;
+	if (ret)
+		errno = -ret;
+
+	return retp;
 }
 EXPORT_SYMBOL(memmap);
 
@@ -804,19 +979,112 @@ int close(int fd)
 	struct device_d *dev;
 	struct fs_driver_d *fsdrv;
 	FILE *f = &files[fd];
+	int ret;
 
 	if (check_fd(fd))
-		return errno;
+		return -errno;
 
 	dev = f->dev;
 
 	fsdrv = dev_to_fs_driver(dev);
-	errno = fsdrv->close(dev, f);
+	ret = fsdrv->close(dev, f);
 
 	put_file(f);
-	return errno;
+
+	if (ret)
+		errno = -ret;
+
+	return ret;
 }
 EXPORT_SYMBOL(close);
+
+int readlink(const char *pathname, char *buf, size_t bufsiz)
+{
+	struct fs_driver_d *fsdrv;
+	struct fs_device_d *fsdev;
+	char *p = normalise_path(pathname);
+	char *freep = p;
+	int ret;
+
+	ret = path_check_prereq(pathname, S_IFLNK);
+	if (ret)
+		goto out;
+
+	fsdev = get_fs_device_and_root_path(&p);
+	if (!fsdev) {
+		ret = -ENODEV;
+		goto out;
+	}
+	fsdrv = fsdev->driver;
+
+	if (fsdrv->readlink)
+		ret = fsdrv->readlink(&fsdev->dev, p, buf, bufsiz);
+	else
+		ret = -ENOSYS;
+
+	if (ret)
+		goto out;
+
+out:
+	free(freep);
+
+	if (ret)
+		errno = -ret;
+
+	return ret;
+}
+EXPORT_SYMBOL(readlink);
+
+int symlink(const char *pathname, const char *newpath)
+{
+	struct fs_driver_d *fsdrv;
+	struct fs_device_d *fsdev;
+	char *p;
+	char *freep = normalise_path(pathname);
+	int ret;
+	struct stat s;
+
+	if (!freep)
+		return -ENOMEM;
+
+	if (!stat(freep, &s) && S_ISDIR(s.st_mode)) {
+		ret = -ENOSYS;
+		goto out;
+	}
+
+	free(freep);
+	freep = p = normalise_path(newpath);
+
+	if (!p)
+		return -ENOMEM;
+
+	ret = lstat(p, &s);
+	if (!ret) {
+		ret = -EEXIST;
+		goto out;
+	}
+
+	fsdev = get_fs_device_and_root_path(&p);
+	if (!fsdev) {
+		ret = -ENODEV;
+		goto out;
+	}
+	fsdrv = fsdev->driver;
+
+	if (fsdrv->symlink) {
+		ret = fsdrv->symlink(&fsdev->dev, pathname, p);
+	} else {
+		ret = -EPERM;
+	}
+
+out:
+	free(freep);
+	if (ret)
+		errno = -ret;
+
+	return ret;
+}
+EXPORT_SYMBOL(symlink);
 
 static int fs_match(struct device_d *dev, struct driver_d *drv)
 {
@@ -882,6 +1150,28 @@ int register_fs_driver(struct fs_driver_d *fsdrv)
 }
 EXPORT_SYMBOL(register_fs_driver);
 
+static const char *detect_fs(const char *filename)
+{
+	enum filetype type = file_name_detect_type(filename);
+	struct driver_d *drv;
+	struct fs_driver_d *fdrv;
+
+	if (type == filetype_unknown)
+		return NULL;
+
+	for_each_driver(drv) {
+		if (drv->bus != &fs_bus)
+			continue;
+
+		fdrv = drv_to_fs_driver(drv);
+
+		if (type == fdrv->type)
+			return drv->name;
+	}
+
+	return NULL;
+}
+
 /*
  * Mount a device to a directory.
  * We do this by registering a new device on which the filesystem
@@ -893,26 +1183,31 @@ int mount(const char *device, const char *fsname, const char *_path)
 	int ret;
 	char *path = normalise_path(_path);
 
-	errno = 0;
-
 	debug("mount: %s on %s type %s\n", device, path, fsname);
 
 	if (fs_dev_root) {
 		fsdev = get_fsdevice_by_path(path);
 		if (fsdev != fs_dev_root) {
 			printf("sorry, no nested mounts\n");
-			errno = -EBUSY;
+			ret = -EBUSY;
 			goto err_free_path;
 		}
-		if (path_check_prereq(path, S_IFDIR))
+		ret = path_check_prereq(path, S_IFDIR);
+		if (ret)
 			goto err_free_path;
 	} else {
 		/* no mtab, so we only allow to mount on '/' */
 		if (*path != '/' || *(path + 1)) {
-			errno = -ENOTDIR;
+			ret = -ENOTDIR;
 			goto err_free_path;
 		}
 	}
+
+	if (!fsname)
+		fsname = detect_fs(device);
+
+	if (!fsname)
+		return -ENOENT;
 
 	fsdev = xzalloc(sizeof(struct fs_device_d));
 	fsdev->backingstore = xstrdup(device);
@@ -924,21 +1219,18 @@ int mount(const char *device, const char *fsname, const char *_path)
 	if (!strncmp(device, "/dev/", 5))
 		fsdev->cdev = cdev_by_name(device + 5);
 
-	if ((ret = register_device(&fsdev->dev))) {
-		errno = ret;
+	ret = register_device(&fsdev->dev);
+	if (ret)
 		goto err_register;
-	}
 
 	if (!fsdev->dev.driver) {
 		/*
 		 * Driver didn't accept the device or no driver for this
 		 * device. Bail out
 		 */
-		errno = -EINVAL;
+		ret = -EINVAL;
 		goto err_no_driver;
 	}
-
-	errno = 0;
 
 	return 0;
 
@@ -949,7 +1241,9 @@ err_register:
 err_free_path:
 	free(path);
 
-	return errno;
+	errno = -ret;
+
+	return ret;
 }
 EXPORT_SYMBOL(mount);
 
@@ -968,13 +1262,13 @@ int umount(const char *pathname)
 	free(p);
 
 	if (f == fs_dev_root && !list_is_singular(&fs_device_list)) {
-		errno = -EBUSY;
-		return errno;
+		errno = EBUSY;
+		return -EBUSY;
 	}
 
 	if (!fsdev) {
-		errno = -EFAULT;
-		return errno;
+		errno = EFAULT;
+		return -EFAULT;
 	}
 
 	unregister_device(&fsdev->dev);
@@ -990,13 +1284,17 @@ DIR *opendir(const char *pathname)
 	struct fs_driver_d *fsdrv;
 	char *p = normalise_path(pathname);
 	char *freep = p;
+	int ret;
 
-	if (path_check_prereq(pathname, S_IFDIR))
+	ret = path_check_prereq(pathname, S_IFDIR);
+	if (ret)
 		goto out;
 
 	fsdev = get_fs_device_and_root_path(&p);
-	if (!fsdev)
+	if (!fsdev) {
+		ret = -ENOENT;
 		goto out;
+	}
 	fsdrv = fsdev->driver;
 
 	debug("opendir: fsdrv: %p\n",fsdrv);
@@ -1005,41 +1303,78 @@ DIR *opendir(const char *pathname)
 	if (dir) {
 		dir->dev = &fsdev->dev;
 		dir->fsdrv = fsdrv;
+	} else {
+		/*
+		 * FIXME: The fs drivers should return ERR_PTR here so that
+		 * we are able to forward the error
+		 */
+		ret = -EINVAL;
 	}
 
 out:
 	free(freep);
+
+	if (ret)
+		errno = -ret;
+
 	return dir;
 }
 EXPORT_SYMBOL(opendir);
 
 struct dirent *readdir(DIR *dir)
 {
+	struct dirent *ent;
+
 	if (!dir)
 		return NULL;
 
-	return dir->fsdrv->readdir(dir->dev, dir);
+	ent = dir->fsdrv->readdir(dir->dev, dir);
+
+	if (!ent)
+		errno = EBADF;
+
+	return ent;
 }
 EXPORT_SYMBOL(readdir);
 
 int closedir(DIR *dir)
 {
+	int ret;
+
 	if (!dir) {
-		errno = -EBADF;
-		return -1;
+		errno = EBADF;
+		return -EBADF;
 	}
 
-	return dir->fsdrv->closedir(dir->dev, dir);
+	ret = dir->fsdrv->closedir(dir->dev, dir);
+	if (ret)
+		errno = -ret;
+
+	return ret;
 }
 EXPORT_SYMBOL(closedir);
 
 int stat(const char *filename, struct stat *s)
+{
+	char *f;
+
+	f = realfile(filename, s);
+	if (IS_ERR(f))
+		return PTR_ERR(f);
+
+	free(f);
+	return 0;
+}
+EXPORT_SYMBOL(stat);
+
+int lstat(const char *filename, struct stat *s)
 {
 	struct device_d *dev;
 	struct fs_driver_d *fsdrv;
 	struct fs_device_d *fsdev;
 	char *f = normalise_path(filename);
 	char *freep = f;
+	int ret;
 
 	automount_mount(f, 1);
 
@@ -1047,7 +1382,7 @@ int stat(const char *filename, struct stat *s)
 
 	fsdev = get_fsdevice_by_path(f);
 	if (!fsdev) {
-		errno = -ENOENT;
+		ret = -ENOENT;
 		goto out;
 	}
 
@@ -1062,12 +1397,16 @@ int stat(const char *filename, struct stat *s)
 	if (*f == 0)
 		f = "/";
 
-	errno = fsdrv->stat(dev, f, s);
+	ret = fsdrv->stat(dev, f, s);
 out:
 	free(freep);
-	return errno;
+
+	if (ret)
+		errno = -ret;
+
+	return ret;
 }
-EXPORT_SYMBOL(stat);
+EXPORT_SYMBOL(lstat);
 
 int mkdir (const char *pathname, mode_t mode)
 {
@@ -1075,24 +1414,34 @@ int mkdir (const char *pathname, mode_t mode)
 	struct fs_device_d *fsdev;
 	char *p = normalise_path(pathname);
 	char *freep = p;
+	int ret;
 
-	if (path_check_prereq(pathname, S_UB_DOES_NOT_EXIST))
+	ret = parent_check_directory(p);
+	if (ret)
+		goto out;
+
+	ret = path_check_prereq(pathname, S_UB_DOES_NOT_EXIST);
+	if (ret)
 		goto out;
 
 	fsdev = get_fs_device_and_root_path(&p);
-	if (!fsdev)
-		goto out;
-	fsdrv = fsdev->driver;
-
-	if (fsdrv->mkdir) {
-		errno = fsdrv->mkdir(&fsdev->dev, p);
+	if (!fsdev) {
+		ret = -ENOENT;
 		goto out;
 	}
+	fsdrv = fsdev->driver;
 
-	errno = -EROFS;
+	if (fsdrv->mkdir)
+		ret = fsdrv->mkdir(&fsdev->dev, p);
+	else
+		ret = -EROFS;
 out:
 	free(freep);
-	return errno;
+
+	if (ret)
+		errno = -ret;
+
+	return ret;
 }
 EXPORT_SYMBOL(mkdir);
 
@@ -1102,24 +1451,36 @@ int rmdir (const char *pathname)
 	struct fs_device_d *fsdev;
 	char *p = normalise_path(pathname);
 	char *freep = p;
+	int ret;
 
-	if (path_check_prereq(pathname, S_IFDIR | S_UB_IS_EMPTY))
-		goto out;
-
-	fsdev = get_fs_device_and_root_path(&p);
-	if (!fsdev)
-		goto out;
-	fsdrv = fsdev->driver;
-
-	if (fsdrv->rmdir) {
-		errno = fsdrv->rmdir(&fsdev->dev, p);
+	ret = path_check_prereq(pathname, S_IFLNK);
+	if (!ret) {
+		ret = -ENOTDIR;
 		goto out;
 	}
 
-	errno = -EROFS;
+	ret = path_check_prereq(pathname, S_IFDIR | S_UB_IS_EMPTY);
+	if (ret)
+		goto out;
+
+	fsdev = get_fs_device_and_root_path(&p);
+	if (!fsdev) {
+		ret = -ENODEV;
+		goto out;
+	}
+	fsdrv = fsdev->driver;
+
+	if (fsdrv->rmdir)
+		ret = fsdrv->rmdir(&fsdev->dev, p);
+	else
+		ret = -EROFS;
 out:
 	free(freep);
-	return errno;
+
+	if (ret)
+		errno = -ret;
+
+	return ret;
 }
 EXPORT_SYMBOL(rmdir);
 
@@ -1155,7 +1516,7 @@ static void memcpy_sz(void *_dst, const void *_src, ulong count, ulong rwsize)
 	}
 }
 
-ssize_t mem_read(struct cdev *cdev, void *buf, size_t count, ulong offset, ulong flags)
+ssize_t mem_read(struct cdev *cdev, void *buf, size_t count, loff_t offset, ulong flags)
 {
 	ulong size;
 	struct device_d *dev;
@@ -1164,13 +1525,13 @@ ssize_t mem_read(struct cdev *cdev, void *buf, size_t count, ulong offset, ulong
 		return -1;
 	dev = cdev->dev;
 
-	size = min((ulong)count, dev->resource[0].size - offset);
+	size = min((loff_t)count, resource_size(&dev->resource[0]) - offset);
 	memcpy_sz(buf, dev_get_mem_region(dev, 0) + offset, size, flags & O_RWSIZE_MASK);
 	return size;
 }
 EXPORT_SYMBOL(mem_read);
 
-ssize_t mem_write(struct cdev *cdev, const void *buf, size_t count, ulong offset, ulong flags)
+ssize_t mem_write(struct cdev *cdev, const void *buf, size_t count, loff_t offset, ulong flags)
 {
 	ulong size;
 	struct device_d *dev;
@@ -1179,9 +1540,8 @@ ssize_t mem_write(struct cdev *cdev, const void *buf, size_t count, ulong offset
 		return -1;
 	dev = cdev->dev;
 
-	size = min((ulong)count, dev->resource[0].size - offset);
+	size = min((loff_t)count, resource_size(&dev->resource[0]) - offset);
 	memcpy_sz(dev_get_mem_region(dev, 0) + offset, buf, size, flags & O_RWSIZE_MASK);
 	return size;
 }
 EXPORT_SYMBOL(mem_write);
-

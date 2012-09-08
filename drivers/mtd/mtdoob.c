@@ -38,11 +38,12 @@ static struct mtd_info *to_mtd(struct cdev *cdev)
 }
 
 static ssize_t mtd_read_oob(struct cdev *cdev, void *buf, size_t count,
-			     ulong offset, ulong flags)
+			     loff_t _offset, ulong flags)
 {
 	struct mtd_info *mtd = to_mtd(cdev);
 	struct mtd_oob_ops ops;
 	int ret;
+	unsigned long offset = _offset;
 
 	if (count < mtd->oobsize)
 		return -EINVAL;
@@ -68,7 +69,7 @@ static struct file_operations mtd_ops_oob = {
 	.lseek  = dev_lseek_default,
 };
 
-static int add_mtdoob_device(struct mtd_info *mtd, char *devname)
+static int add_mtdoob_device(struct mtd_info *mtd, char *devname, void **priv)
 {
 	struct mtdoob *mtdoob;
 
@@ -79,13 +80,26 @@ static int add_mtdoob_device(struct mtd_info *mtd, char *devname)
 	mtdoob->cdev.priv = mtdoob;
 	mtdoob->cdev.dev = &mtd->class_dev;
 	mtdoob->mtd = mtd;
+	*priv = mtdoob;
 	devfs_create(&mtdoob->cdev);
+
+	return 0;
+}
+
+static int del_mtdoob_device(struct mtd_info *mtd, void **priv)
+{
+	struct mtdoob *mtdoob;
+
+	mtdoob = *priv;
+	devfs_remove(&mtdoob->cdev);
+	free(mtdoob);
 
 	return 0;
 }
 
 static struct mtddev_hook mtdoob_hook = {
 	.add_mtd_device = add_mtdoob_device,
+	.del_mtd_device = del_mtdoob_device,
 };
 
 static int __init register_mtdoob(void)

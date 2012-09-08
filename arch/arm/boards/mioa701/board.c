@@ -121,7 +121,7 @@ static int mioa701_devices_init(void)
 
 	pxa_add_pwm((void *)0x40b00000, 0);
 	pxa_add_fb((void *)0x44000000, &mioa701_pxafb_info);
-	pxa_add_mmc((void *)0x41100000, -1, &mioa701_mmc_info);
+	pxa_add_mmc((void *)0x41100000, DEVICE_ID_DYNAMIC, &mioa701_mmc_info);
 	docg3_iospace = map_io_sections(0x0, (void *)0xe0000000, 0x2000);
 	add_generic_device("docg3", DEVICE_ID_DYNAMIC, NULL, (ulong) docg3_iospace,
 			0x2000, IORESOURCE_MEM, NULL);
@@ -261,8 +261,17 @@ static int mioa701_coredevice_init(void)
 	/* route pins */
 	pxa2xx_mfp_config(ARRAY_AND_SIZE(mioa701_pin_config));
 
-	CCCR = CCCR_A | 0x20110;
-	cclk = 0x02;
+	/*
+	 * Put the board in superspeed (520 MHz) to speed-up logo/OS loading.
+	 * This requires to command the Maxim 1586 to upgrade core voltage to
+	 * 1.475 V, on the power I2C bus (device 0x14).
+	 */
+	CCCR = CCCR_A | 0x20290;
+	PCFR = PCFR_GPR_EN | PCFR_FVC | PCFR_DC_EN | PCFR_PI2C_EN | PCFR_OPDE;
+	PCMD(0) = PCMD_LC | 0x1f;
+	PVCR = 0x14;
+
+	cclk = 0x0b;
 	asm volatile("mcr p14, 0, %0, c6, c0, 0 @ set CCLK"
 	  : : "r" (cclk) : "cc");
 

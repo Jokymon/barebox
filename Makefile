@@ -1,5 +1,5 @@
 VERSION = 2012
-PATCHLEVEL = 05
+PATCHLEVEL = 09
 SUBLEVEL = 0
 EXTRAVERSION =
 NAME = Amissive Actinocutious Kiwi
@@ -254,6 +254,7 @@ MAKEFLAGS += --include-dir=$(srctree)
 
 # We need some generic definitions.
 include $(srctree)/scripts/Kbuild.include
+include $(srctree)/scripts/Makefile.lib
 
 # Make variables (CC, etc...)
 
@@ -436,12 +437,6 @@ else
 include/config/auto.conf: ;
 endif # $(dot-config)
 
-# The all: target is the default when no target is given on the
-# command line.
-# This allow a user to issue only 'make' to build a kernel
-# Defaults barebox but it is usually overridden in the arch makefile
-all: barebox.bin
-
 include $(srctree)/arch/$(ARCH)/Makefile
 
 ifdef CONFIG_DEBUG_INFO
@@ -472,7 +467,14 @@ CFLAGS += $(call cc-option,-Wno-pointer-sign,)
 # set in the environment
 # Also any assignments in arch/$(ARCH)/Makefile take precedence over
 # this default value
-export KBUILD_IMAGE ?= barebox
+export KBUILD_IMAGE ?= barebox.bin
+
+barebox-flash-image: $(KBUILD_IMAGE)
+	$(call if_changed,ln)
+
+all: barebox-flash-image
+
+common-$(CONFIG_PBL_IMAGE)	+= pbl/
 
 barebox-dirs	:= $(patsubst %/,%,$(filter %/, $(common-y)))
 
@@ -481,6 +483,7 @@ barebox-alldirs	:= $(sort $(barebox-dirs) $(patsubst %/,%,$(filter %/, \
 		     $(core-n) $(core-) $(drivers-n) $(drivers-) \
 		     $(net-n)  $(net-)  $(libs-n)    $(libs-))))
 
+pbl-common-y	:= $(patsubst %/, %/built-in-pbl.o, $(common-y))
 common-y	:= $(patsubst %/, %/built-in.o, $(common-y))
 
 # Build barebox
@@ -510,6 +513,8 @@ common-y	:= $(patsubst %/, %/built-in.o, $(common-y))
 # System.map is generated to document addresses of all kernel symbols
 
 barebox-common := $(common-y)
+barebox-pbl-common := $(pbl-common-y)
+export barebox-pbl-common
 barebox-all    := $(barebox-common)
 barebox-lds    := $(lds-y)
 
@@ -517,7 +522,7 @@ barebox-lds    := $(lds-y)
 # May be overridden by arch/$(ARCH)/Makefile
 quiet_cmd_barebox__ ?= LD      $@
       cmd_barebox__ ?= $(LD) $(LDFLAGS) $(LDFLAGS_barebox) -o $@ \
-      -T $(barebox-lds) $(barebox-head)                         \
+      -T $(barebox-lds)                         \
       --start-group $(barebox-common) --end-group                  \
       $(filter-out $(barebox-lds) $(barebox-common) FORCE ,$^)
 
@@ -540,7 +545,7 @@ quiet_cmd_check_file_size = CHKSIZE $@
 	max_size=`printf "%d" $2`;					\
 	if [ $$size -gt $$max_size ] ;					\
 	then								\
-		echo "$@ size $$size > of the maximum size $$max_size";	\
+		echo "$@ size $$size > of the maximum size $$max_size" >&2;	\
 		exit 1 ;						\
 	fi;
 
@@ -549,12 +554,13 @@ quiet_cmd_sysmap = SYSMAP
       cmd_sysmap = $(CONFIG_SHELL) $(srctree)/scripts/mksysmap
 
 # Link of barebox
+# If CONFIG_KALLSYMS is set .version is already updated
 # Generate System.map and verify that the content is consistent
 # Use + in front of the barebox_version rule to silent warning with make -j2
 # First command is ':' to allow us to use + in front of the rule
 define rule_barebox__
 	:
-
+	$(if $(CONFIG_KALLSYMS),,+$(call cmd,barebox_version))
 	$(call cmd,barebox__)
 
 	$(Q)echo 'cmd_$@ := $(cmd_barebox__)' > $(@D)/.$(@F).cmd
@@ -670,7 +676,9 @@ OBJCOPYFLAGS_barebox.bin = -O binary
 
 barebox.bin: barebox FORCE
 	$(call if_changed,objcopy)
+ifndef CONFIG_PBL_IMAGE
 	$(call cmd,check_file_size,$(CONFIG_BAREBOX_MAX_IMAGE_SIZE))
+endif
 
 ifdef CONFIG_X86
 barebox.S: barebox
@@ -695,9 +703,6 @@ endif
 	@echo " * Init Calls content" >> barebox.S
 	$(Q)$(OBJDUMP) -j .barebox_initcalls -d barebox >> barebox.S
 else
-quiet_cmd_disasm = DISASM  $@
-      cmd_disasm = $(OBJDUMP) -d $< > $@
-
 barebox.S: barebox FORCE
 	$(call if_changed,disasm)
 endif
@@ -713,7 +718,7 @@ barebox.srec: barebox
 
 # The actual objects are generated when descending,
 # make sure no implicit rule kicks in
-$(sort $(barebox-head) $(barebox-common) ) $(barebox-lds): $(barebox-dirs) ;
+$(sort $(barebox-head) $(barebox-common) ) $(barebox-lds) $(barebox-pbl-common): $(barebox-dirs) ;
 
 # Handle descending into subdirectories listed in $(barebox-dirs)
 # Preset locale variables to speed up the build process. Limit locale
@@ -1003,7 +1008,8 @@ CLEAN_DIRS  += $(MODVERDIR)
 CLEAN_FILES +=	barebox System.map include/generated/barebox_default_env.h \
                 .tmp_version .tmp_barebox* barebox.bin barebox.map barebox.S \
 		.tmp_kallsyms* barebox_default_env* barebox.ldr \
-		Doxyfile.version barebox.srec
+		scripts/bareboxenv-target barebox-flash-image \
+		Doxyfile.version barebox.srec barebox.s5p
 
 # Directories & files removed with 'make mrproper'
 MRPROPER_DIRS  += include/config include2 usr/include

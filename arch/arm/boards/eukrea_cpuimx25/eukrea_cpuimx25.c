@@ -28,6 +28,7 @@
 #include <environment.h>
 #include <mach/imx-regs.h>
 #include <asm/armlinux.h>
+#include <asm/barebox-arm.h>
 #include <asm-generic/sections.h>
 #include <mach/gpio.h>
 #include <io.h>
@@ -49,45 +50,9 @@
 #include <mach/devices-imx25.h>
 #include <asm/barebox-arm-head.h>
 
-extern void exception_vectors(void);
-
-void __naked __flash_header_start go(void)
-{
-	barebox_arm_head();
-}
-
-struct imx_dcd_entry __dcd_entry_section dcd_entry[] = {
-	{ .ptr_type = 4, .addr = 0xb8001010, .val = 0x00000004, },
-	{ .ptr_type = 4, .addr = 0xb8001000, .val = 0x92100000, },
-	{ .ptr_type = 1, .addr = 0x80000400, .val = 0x12344321, },
-	{ .ptr_type = 4, .addr = 0xb8001000, .val = 0xa2100000, },
-	{ .ptr_type = 4, .addr = 0x80000000, .val = 0x12344321, },
-	{ .ptr_type = 4, .addr = 0x80000000, .val = 0x12344321, },
-	{ .ptr_type = 4, .addr = 0xb8001000, .val = 0xb2100000, },
-	{ .ptr_type = 1, .addr = 0x80000033, .val = 0xda, },
-	{ .ptr_type = 1, .addr = 0x81000000, .val = 0xff, },
-	{ .ptr_type = 4, .addr = 0xb8001000, .val = 0x82216080, },
-	{ .ptr_type = 4, .addr = 0xb8001004, .val = 0x00295729, },
-	{ .ptr_type = 4, .addr = 0x53f80008, .val = 0x20034000, },
-};
-
-struct imx_flash_header __flash_header_section flash_header = {
-	.app_code_jump_vector	= DEST_BASE + ((unsigned int)&exception_vectors - TEXT_BASE),
-	.app_code_barker	= APP_CODE_BARKER,
-	.app_code_csf		= 0,
-	.dcd_ptr_ptr		= FLASH_HEADER_BASE + offsetof(struct imx_flash_header, dcd),
-	.super_root_key		= 0,
-	.dcd			= FLASH_HEADER_BASE + offsetof(struct imx_flash_header, dcd_barker),
-	.app_dest		= DEST_BASE,
-	.dcd_barker		= DCD_BARKER,
-	.dcd_block_len		= sizeof(dcd_entry),
-};
-
-unsigned long __image_len_section barebox_len = DCD_BAREBOX_SIZE;
-
 static struct fec_platform_data fec_info = {
 	.xcv_type	= RMII,
-	.phy_addr	= 1,
+	.phy_addr	= 0,
 };
 
 struct imx_nand_platform_data nand_info = {
@@ -216,6 +181,8 @@ static iomux_v3_cfg_t eukrea_cpuimx25_pads[] = {
 	MX25_PAD_SD1_DATA3__SD1_DATA3,
 	/* LED */
 	MX25_PAD_POWER_FAIL__GPIO_3_19,
+	/* SWITCH */
+	MX25_PAD_VSTBY_ACK__GPIO_3_18,
 };
 
 static int eukrea_cpuimx25_devices_init(void)
@@ -232,11 +199,11 @@ static int eukrea_cpuimx25_devices_init(void)
 	imx25_add_nand(&nand_info);
 
 	devfs_add_partition("nand0", 0x00000, 0x40000,
-		PARTITION_FIXED, "self_raw");
+		DEVFS_PARTITION_FIXED, "self_raw");
 	dev_add_bb_dev("self_raw", "self0");
 
 	devfs_add_partition("nand0", 0x40000, 0x20000,
-		PARTITION_FIXED, "env_raw");
+		DEVFS_PARTITION_FIXED, "env_raw");
 	dev_add_bb_dev("env_raw", "env0");
 
 	/* enable LCD */
@@ -245,6 +212,9 @@ static int eukrea_cpuimx25_devices_init(void)
 
 	/* LED : default OFF */
 	gpio_direction_output(2 * 32 + 19, 1);
+
+	/* Switch : input */
+	gpio_direction_input(2 * 32 + 18);
 
 	imx25_add_fb(&eukrea_cpuimx25_fb_data);
 
@@ -255,8 +225,12 @@ static int eukrea_cpuimx25_devices_init(void)
 	imx25_usb_init();
 	add_generic_usb_ehci_device(DEVICE_ID_DYNAMIC, IMX_OTG_BASE + 0x400, NULL);
 #endif
+#ifdef CONFIG_USB_GADGET
+	/* Workaround ENGcm09152 */
+	writel(readl(IMX_OTG_BASE + 0x608) | (1 << 23), IMX_OTG_BASE + 0x608);
 	add_generic_device("fsl-udc", DEVICE_ID_DYNAMIC, NULL, IMX_OTG_BASE, 0x200,
 			   IORESOURCE_MEM, &usb_pdata);
+#endif
 
 	armlinux_set_bootparams((void *)0x80000100);
 	armlinux_set_architecture(MACH_TYPE_EUKREA_CPUIMX25SD);
@@ -277,7 +251,7 @@ console_initcall(eukrea_cpuimx25_console_init);
 #ifdef CONFIG_NAND_IMX_BOOT
 void __bare_init nand_boot(void)
 {
-	imx_nand_load_image((void *)TEXT_BASE, barebox_image_size);
+	imx_nand_load_image(_text, barebox_image_size);
 }
 #endif
 

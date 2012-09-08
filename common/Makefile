@@ -24,21 +24,31 @@ obj-$(CONFIG_CONSOLE_FULL) += console.o
 obj-$(CONFIG_CONSOLE_SIMPLE) += console_simple.o
 obj-$(CONFIG_DIGEST) += digest.o
 obj-$(CONFIG_ENVIRONMENT_VARIABLES) += env.o
-obj-$(CONFIG_CMD_BOOTM) += image.o
-obj-$(CONFIG_CMD_BOOTM) += uimage.o
+obj-$(CONFIG_UIMAGE) += image.o
+obj-$(CONFIG_UIMAGE) += uimage.o
 obj-y += startup.o
 obj-y += misc.o
 obj-y += memsize.o
+obj-$(CONFIG_GLOBALVAR) += globalvar.o
+obj-$(CONFIG_RESET_SOURCE) += reset_source.o
 obj-$(CONFIG_FILETYPE) += filetype.o
 obj-y += resource.o
 obj-$(CONFIG_MENU) += menu.o
 obj-$(CONFIG_PASSWORD) += password.o
 obj-$(CONFIG_MODULES) += module.o
+obj-$(CONFIG_FLEXIBLE_BOOTARGS) += bootargs.o
 extra-$(CONFIG_MODULES) += module.lds
 
 ifdef CONFIG_DEFAULT_ENVIRONMENT
 $(obj)/startup.o: include/generated/barebox_default_env.h
 $(obj)/env.o: include/generated/barebox_default_env.h
+
+ifeq ($(CONFIG_DEFAULT_ENVIRONMENT_GENERIC_NEW),y)
+DEFAULT_ENVIRONMENT_PATH = "defaultenv-2/base"
+ifeq ($(CONFIG_CMD_MENU_MANAGEMENT),y)
+DEFAULT_ENVIRONMENT_PATH += "defaultenv-2/menu"
+endif
+endif
 
 ifeq ($(CONFIG_DEFAULT_ENVIRONMENT_GENERIC),y)
 DEFAULT_ENVIRONMENT_PATH = "defaultenv"
@@ -48,7 +58,7 @@ ifneq ($(CONFIG_DEFAULT_ENVIRONMENT_PATH),"")
 DEFAULT_ENVIRONMENT_PATH += $(CONFIG_DEFAULT_ENVIRONMENT_PATH)
 endif
 
-ENV_FILES := $(shell cd $(srctree); for i in $(DEFAULT_ENVIRONMENT_PATH); do find $${i} -type f -exec readlink -f '{}' \;; done)
+ENV_FILES := $(shell cd $(srctree); for i in $(DEFAULT_ENVIRONMENT_PATH); do find $${i} -type f ; done)
 
 endif # ifdef CONFIG_DEFAULT_ENVIRONMENT
 

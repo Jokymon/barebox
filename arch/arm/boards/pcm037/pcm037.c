@@ -37,6 +37,7 @@
 #include <asm/mmu.h>
 #include <partition.h>
 #include <generated/mach-types.h>
+#include <asm/barebox-arm.h>
 #include <mach/imx-nand.h>
 #include <mach/devices-imx31.h>
 
@@ -194,8 +195,8 @@ static int imx31_devices_init(void)
 	 * Create partitions that should be
 	 * not touched by any regular user
 	 */
-	devfs_add_partition("nor0", 0x00000, 0x40000, PARTITION_FIXED, "self0");	/* ourself */
-	devfs_add_partition("nor0", 0x40000, 0x20000, PARTITION_FIXED, "env0");	/* environment */
+	devfs_add_partition("nor0", 0x00000, 0x40000, DEVFS_PARTITION_FIXED, "self0");	/* ourself */
+	devfs_add_partition("nor0", 0x40000, 0x20000, DEVFS_PARTITION_FIXED, "env0");	/* environment */
 
 	protect_file("/dev/env0", 1);
 
@@ -246,6 +247,7 @@ console_initcall(imx31_console_init);
 #ifdef CONFIG_NAND_IMX_BOOT
 void __bare_init nand_boot(void)
 {
-	imx_nand_load_image((void *)TEXT_BASE, barebox_image_size);
+	imx_nand_load_image(_text, barebox_image_size);
+	board_init_lowlevel_return();
 }
 #endif

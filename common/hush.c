@@ -521,6 +521,8 @@ static int builtin_getopt(struct p_context *ctx, struct child_prog *child,
 			o->optarg = xstrdup(optarg);
 			list_add_tail(&o->list, &ctx->options);
 		}
+		ctx->global_argv += optind - 1;
+		ctx->global_argc -= optind - 1;
 	}
 
 	ctx->options_parsed = 1;
@@ -554,6 +556,18 @@ static int builtin_getopt(struct p_context *ctx, struct child_prog *child,
 	return -1;
 }
 #endif
+
+static int builtin_exit(struct p_context *ctx, struct child_prog *child,
+		int argc, char *argv[])
+{
+	int r;
+
+	r = last_return_code;
+	if (argc > 1)
+		r = simple_strtoul(argv[1], NULL, 0);
+
+	return -r - 2;
+}
 
 static void remove_quotes_in_str(char *src)
 {
@@ -757,23 +771,31 @@ static int run_pipe_real(struct p_context *ctx, struct pipe *pi)
 	if (child->sp) {
 		char * str = NULL;
 		struct p_context ctx1;
+		int rcode;
 
 		str = make_string((child->argv + i));
-		parse_string_outer(&ctx1, str, FLAG_EXIT_FROM_LOOP | FLAG_REPARSING);
+		rcode = parse_string_outer(&ctx1, str, FLAG_EXIT_FROM_LOOP | FLAG_REPARSING);
 		release_context(&ctx1);
 		free(str);
 
-		return last_return_code;
+		return rcode;
 	}
 
 	do_glob_in_argv(&globbuf, child->argc - i, &child->argv[i]);
 
 	remove_quotes(globbuf.gl_pathc, globbuf.gl_pathv);
 
-	if (!strcmp(globbuf.gl_pathv[0], "getopt"))
+	if (!strcmp(globbuf.gl_pathv[0], "getopt")) {
 		ret = builtin_getopt(ctx, child, globbuf.gl_pathc, globbuf.gl_pathv);
-	else
+	} else if (!strcmp(globbuf.gl_pathv[0], "exit")) {
+		ret = builtin_exit(ctx, child, globbuf.gl_pathc, globbuf.gl_pathv);
+	} else {
 		ret = execute_binfmt(globbuf.gl_pathc, globbuf.gl_pathv);
+		if (ret < 0) {
+			printf("%s: %s\n", globbuf.gl_pathv[0], strerror(-ret));
+			ret = 127;
+		}
+	}
 
 	globfree(&globbuf);
 
@@ -1603,7 +1625,7 @@ static int parse_stream_outer(struct p_context *ctx, struct in_str *inp, int fla
 			}
 			if (code < -1) {	/* exit */
 				b_free(&temp);
-				return -code - 2;
+				return code;
 			}
 		} else {
 			if (ctx->old_flag != 0) {
@@ -1612,7 +1634,6 @@ static int parse_stream_outer(struct p_context *ctx, struct in_str *inp, int fla
 			}
 			if (inp->__promptme == 0)
 				printf("<INTERRUPT>\n");
-			inp->__promptme = 1;
 			temp.nonnull = 0;
 			temp.quote = 0;
 			free_pipe_list(ctx->list_head,0);
@@ -1643,11 +1664,12 @@ static int parse_string_outer(struct p_context *ctx, const char *s, int flag)
 		setup_string_in_str(&input, p);
 		rcode = parse_stream_outer(ctx, &input, flag);
 		free(p);
-		return rcode;
 	} else {
 		setup_string_in_str(&input, s);
-		return parse_stream_outer(ctx, &input, flag);
+		rcode = parse_stream_outer(ctx, &input, flag);
 	}
+
+	return rcode;
 }
 
 static char *insert_var_value(char *inp)
@@ -1794,6 +1816,8 @@ static int source_script(const char *path, int argc, char *argv[])
 	}
 
 	ret = parse_string_outer(&ctx, script, FLAG_PARSE_SEMICOLON);
+	if (ret < -1)
+		ret = -ret - 2;
 
 	release_context(&ctx);
 	free(script);
@@ -1807,9 +1831,14 @@ int run_shell(void)
 	struct in_str input;
 	struct p_context ctx;
 
-	setup_file_in_str(&input);
-	rcode = parse_stream_outer(&ctx, &input, FLAG_PARSE_SEMICOLON);
-	release_context(&ctx);
+	do {
+		setup_file_in_str(&input);
+		rcode = parse_stream_outer(&ctx, &input, FLAG_PARSE_SEMICOLON);
+		if (rcode < -1)
+			rcode = -rcode - 2;
+		release_context(&ctx);
+	} while (!input.__promptme);
+
 	return rcode;
 }
 
@@ -1875,26 +1904,39 @@ BAREBOX_CMD_START(source)
 	BAREBOX_CMD_HELP(cmd_source_help)
 BAREBOX_CMD_END
 
-#ifdef CONFIG_HUSH_GETOPT
-static int do_getopt(int argc, char *argv[])
+static int do_dummy_command(int argc, char *argv[])
 {
 	/*
-	 * This function is never reached. The 'getopt' command is
-	 * only here to provide a help text for the getopt builtin.
+	 * This function is never reached. These commands are only here to
+	 * provide help texts for the builtins.
 	 */
 	return 0;
 }
 
+static const __maybe_unused char cmd_exit_help[] =
+"Usage: exit [n]\n"
+"\n"
+"exit script with a status of n. If n is omitted, the exit status is that\n"
+"of the last command executed\n";
+
+BAREBOX_CMD_START(exit)
+	.cmd		= do_dummy_command,
+	.usage		= "exit script",
+	BAREBOX_CMD_HELP(cmd_exit_help)
+BAREBOX_CMD_END
+
+#ifdef CONFIG_HUSH_GETOPT
 static const __maybe_unused char cmd_getopt_help[] =
 "Usage: getopt <optstring> <var>\n"
 "\n"
 "hush option parser. <optstring> is a string with valid options. Add\n"
 "a colon to an options if this option has a required argument or two\n"
 "colons for an optional argument. The current option is saved in <var>,\n"
-"arguments are saved in OPTARG.\n";
+"arguments are saved in OPTARG. After this command additional nonopts\n"
+"can be accessed starting from $1\n";
 
 BAREBOX_CMD_START(getopt)
-	.cmd		= do_getopt,
+	.cmd		= do_dummy_command,
 	.usage		= "getopt <optstring> <var>",
 	BAREBOX_CMD_HELP(cmd_getopt_help)
 BAREBOX_CMD_END

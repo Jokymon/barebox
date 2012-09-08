@@ -1,6 +1,9 @@
 #ifndef __ASM_ARM_HEAD_H
 #define __ASM_ARM_HEAD_H
 
+#ifdef CONFIG_HAVE_MACH_ARM_HEAD
+#include <mach/barebox-arm-head.h>
+#else
 static inline void barebox_arm_head(void)
 {
 	__asm__ __volatile__ (
@@ -24,13 +27,13 @@ static inline void barebox_arm_head(void)
 		"1: b 1b\n"
 		"1: b 1b\n"
 #endif
-		".word 0x65726162\n"			/* 'bare' */
-		".word 0x00786f62\n"			/* 'box' */
+		".asciz \"barebox\"\n"
 		".word _text\n"				/* text base. If copied there,
 							 * barebox can skip relocation
 							 */
 		".word _barebox_image_size\n"		/* image size to copy */
 	);
 }
+#endif
 
 #endif /* __ASM_ARM_HEAD_H */

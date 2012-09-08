@@ -20,6 +20,9 @@
 #include <mach/gpio.h>
 #include <environment.h>
 #include <mach/xload.h>
+#include <i2c/i2c.h>
+#include <gpio.h>
+#include <led.h>
 
 static int board_revision;
 
@@ -78,6 +81,7 @@ static void panda_ehci_init(void)
 	gpio_set_value(hub_nreset, 1);
 	val = readl(0x4a009358);
 	val |= (1 << 24);
+	val |= 0x2;
 	writel(val, 0x4a009358);
 	writel(0x7, 0x4a008180);
 	mdelay(10);
@@ -88,7 +92,7 @@ static void panda_ehci_init(void)
 	/* enable power to hub */
 	gpio_set_value(GPIO_HUB_POWER, 1);
 
-	add_usb_ehci_device(-1, 0x4a064c00,
+	add_usb_ehci_device(DEVICE_ID_DYNAMIC, 0x4a064c00,
 			    0x4a064c00 + 0x10, &ehci_pdata);
 }
 #else
@@ -103,6 +107,28 @@ static void __init panda_boardrev_init(void)
 	board_revision |= (gpio_get_value(GPIO_BOARD_ID2)<<2);
 
 	pr_info("PandaBoard Revision: %03d\n", board_revision);
+}
+
+static struct i2c_board_info i2c_devices[] = {
+	{
+		I2C_BOARD_INFO("twl6030", 0x48),
+	},
+};
+
+struct gpio_led panda_leds[] = {
+	{
+		.gpio = 7,
+		.led = {
+			.name = "heartbeat",
+		},
+	},
+};
+
+static void panda_led_init(void)
+{
+	gpio_direction_output(7, 0);
+	led_gpio_register(&panda_leds[0]);
+	led_set_trigger(LED_TRIGGER_HEARTBEAT, &panda_leds[0].led);
 }
 
 static int panda_devices_init(void)
@@ -133,10 +159,17 @@ static int panda_devices_init(void)
 		sr32(OMAP44XX_SCRM_ALTCLKSRC, 2, 2, 0x3);
 	}
 
+	i2c_register_board_info(0, i2c_devices, ARRAY_SIZE(i2c_devices));
+	add_generic_device("i2c-omap", DEVICE_ID_DYNAMIC,
+				NULL, 0x48070000, 0x1000,
+				IORESOURCE_MEM, NULL);
+
+
 	add_generic_device("omap-hsmmc", DEVICE_ID_DYNAMIC, NULL, 0x4809C100, SZ_4K,
 			   IORESOURCE_MEM, NULL);
 	panda_ehci_init();
 
+	panda_led_init();
 	armlinux_set_bootparams((void *)0x80000100);
 	armlinux_set_architecture(MACH_TYPE_OMAP4_PANDA);
 

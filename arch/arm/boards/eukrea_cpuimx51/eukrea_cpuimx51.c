@@ -53,6 +53,11 @@ struct imx_nand_platform_data nand_info = {
 };
 
 static iomux_v3_cfg_t eukrea_cpuimx51_pads[] = {
+	/* UART1 */
+	MX51_PAD_UART1_RXD__UART1_RXD,
+	MX51_PAD_UART1_TXD__UART1_TXD,
+	MX51_PAD_UART1_RTS__UART1_RTS,
+	MX51_PAD_UART1_CTS__UART1_CTS,
 	/* FEC */
 	MX51_PAD_DISP2_DAT1__FEC_RX_ER,
 	MX51_PAD_DISP2_DAT15__FEC_TDATA0,
@@ -118,9 +123,9 @@ static int eukrea_cpuimx51_devices_init(void)
 #endif
 	imx51_add_nand(&nand_info);
 
-	devfs_add_partition("nand0", 0x00000, 0x40000, PARTITION_FIXED, "self_raw");
+	devfs_add_partition("nand0", 0x00000, 0x40000, DEVFS_PARTITION_FIXED, "self_raw");
 	dev_add_bb_dev("self_raw", "self0");
-	devfs_add_partition("nand0", 0x40000, 0x20000, PARTITION_FIXED, "env_raw");
+	devfs_add_partition("nand0", 0x40000, 0x20000, DEVFS_PARTITION_FIXED, "env_raw");
 	dev_add_bb_dev("env_raw", "env0");
 
 	gpio_direction_output(GPIO_LAN8700_RESET, 0);
@@ -141,12 +146,8 @@ static int eukrea_cpuimx51_console_init(void)
 
 	imx51_init_lowlevel(800);
 
-	writel(0, 0x73fa8228);
-	writel(0, 0x73fa822c);
-	writel(0, 0x73fa8230);
-	writel(0, 0x73fa8234);
-
 	imx51_add_uart0();
+
 	return 0;
 }
 

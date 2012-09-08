@@ -13,6 +13,9 @@ config HAS_AT91_ETHER
 config HAS_NETX_ETHER
 	bool
 
+config HAS_DESIGNWARE_ETH
+	bool
+
 config ARCH_HAS_FEC_IMX
 	bool
 
@@ -32,12 +35,6 @@ config DRIVER_NET_SMC911X
 	help
 	  This option enables support for the SMSC LAN9[12]1[567]
 	  ethernet chip.
-
-config DRIVER_NET_SMC911X_ADDRESS_SHIFT
-	int
-	depends on DRIVER_NET_SMC911X
-	default 1 if MACH_IPE337
-	default 0
 
 config DRIVER_NET_SMC91111
 	bool "smc91111 ethernet driver"
@@ -107,6 +104,24 @@ config DRIVER_NET_KS8851_MLL
 	help
 	  This option enables support for the Micrel KS8851 MLL
 	  ethernet chip.
+
+config DRIVER_NET_DESIGNWARE
+	bool "Designware Universal MAC ethernet driver"
+	select MIIDEV
+	depends on HAS_DESIGNWARE_ETH
+	help
+	  This option enables support for the Synopsys
+	  Designware Core Univesal MAC 10M/100M/1G ethernet IP.
+
+config DRIVER_NET_DESIGNWARE_ALTDESCRIPTOR
+	bool
+	depends on DRIVER_NET_DESIGNWARE
+	default n
+
+config DRIVER_NET_GIANFAR
+	bool "Gianfar Ethernet"
+	depends on ARCH_MPC85XX
+	select MIIDEV
 
 source "drivers/net/usb/Kconfig"
 
