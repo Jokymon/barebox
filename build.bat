@@ -13,6 +13,7 @@ set LD=%GCC_PATH%\i386-elf-ld.exe
 set AR=%GCC_PATH%\i386-elf-ar.exe
 set RANLIB=%GCC_PATH%\i386-elf-ranlib.exe
 set OBJCOPY=%GCC_PATH%\i386-elf-objcopy.exe
+set OBJDUMP=%GCC_PATH%\i386-elf-objdump.exe
 
 set ALLFLAGS=-include config.h -include include\generated\autoconf.h -D__BAREBOX__ -Iinclude -Iarch\x86\include
 set ASFLAGS=%ALLFLAGS% -I. -D__ASSEMBLY__
@@ -70,6 +71,7 @@ if exist build\barebox.lds del /q build\barebox.lds
 
 %OBJCOPY% -I elf32-i386 -O binary -j .bootsector build\minibox build\minibox_mbr 
 %OBJCOPY% -I elf32-i386 -O binary build\minibox build\minibox.img
+%OBJDUMP% -S build\minibox > minibox.lst
 
 @echo Compilation successfull
 @exit /b 0
