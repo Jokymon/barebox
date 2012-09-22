@@ -70,13 +70,23 @@ class Field(object):
 
         instance.array[start:start+self.size] = values2string(powers[0:self.size])
 
-class StructTemplate(object):
+class ClassWithLength(type):
     def __len__(self):
+        return self.clslength()
+
+class StructTemplate(object, metaclass=ClassWithLength):
+    #__metaclass__ = ClassWithLength
+
+    @classmethod
+    def clslength(cls):
         len = 0
-        for attr in self.__class__.__dict__.values():
+        for attr in cls.__dict__.values():
             if isinstance(attr, Field):
                 len += attr.size
         return len
+
+    def __len__(self):
+        return len(self.__class__)
 
 class DAPS(StructTemplate):
     def __init__(self, array, start_offset):
@@ -89,7 +99,7 @@ class DAPS(StructTemplate):
     res2 = Field(3, 1)
     offset = Field(4, 2)
     segment = Field(6, 2)
-    lba = Field(8, 4)
+    lba = Field(8, 8)
 
 class Partition(StructTemplate):
     def __init__(self, array, start_offset):
@@ -116,6 +126,7 @@ class SetupMbrError:
     pass
 
 def fill_daps(sector, count, offset, segment, lba):
+    print("%u, %X" % (sector.start_offset, sector.start_offset))
     assert count < 128
     assert offset < 0x10000
     assert segment < 0x10000
@@ -128,12 +139,82 @@ def fill_daps(sector, count, offset, segment, lba):
     sector.segment = host2target_16(segment)
     sector.lba = host2target_64(lba)
 
+    return True
+
 def invalidate_daps(sector):
     sector.size = MARK_DAPS_INVALID
     sector.res1 = 0
 
-def barebox_linear_image(daps_table, size, pers_sector_count):
-    pass
+def barebox_linear_image(hd_image, daps_table, size, pers_sector_count):
+    offset = LOAD_AREA
+    segment = LOAD_SEGMENT
+    i = 0
+    lba = 2 + pers_sector_count
+
+    size -= 2 * SECTOR_SIZE
+    size = (size + SECTOR_SIZE - 1) & ~(SECTOR_SIZE - 1)
+
+    if (size >= (SECTOR_SIZE / len(DAPS) - 1) * 32 * 1024):
+        print("Image too large to boot. Max size is %u kiB, image size is %u kiB" %
+            ((SECTOR_SIZE / len(DAPS) - 1) * 32, size / 1024)
+            )
+        return False
+
+    if size > 32 * 1024:
+        next_offset = (offset + 32 * 1024 -1) & ~0x7fff
+        chunk_size = next_offset - offset
+        if chunk_size & (SECTOR_SIZE-1):
+            print("Unable to pad from %X to %X in multiple of sectors" % (offset, next_offset))
+            return False
+
+        rc = fill_daps(DAPS(hd_image, daps_table+i*len(DAPS)), chunk_size / SECTOR_SIZE, offset, segment, lba)
+        if not rc:
+            print("Couldn't fill the DAPS")
+            return False
+
+        size -= chunk_size
+        i += 1
+        lba += chunk_size / SECTOR_SIZE
+        offset += chunk_size
+        if offset >= 0x10000:
+            segment += 4096
+            offset = 0
+
+        while size:
+            if size >= 32 * 1024:
+                if i >= (SECTOR_SIZE / len(DAPS)):
+                    print("Internal tool error: Too many DAPS entries!")
+                    return False
+                rc = fill_daps(DAPS(hd_image, daps_table+i*len(DAPS)), 64, offset, segment, lba)
+                if not rc:
+                    return False
+                
+                size -= 32 * 1024
+                lba += 64
+                offset += 32 * 1024
+                if offset >= 0x10000:
+                    segment += 4096
+                    offset = 0
+                i += 1
+            else:
+                if i >= SECTOR_SIZE / len(DAPS):
+                    print("Internal tool error: Too many DAPS entries!")
+                    return False
+                rc = fill_daps(DAPS(hd_image, daps_table+i*len(DAPS)), size / SECTOR_SIZE, offset, segment, lba)
+                if not rc:
+                    return False
+                size = 0
+                i += 1
+    else:
+        pass
+
+    if i >= (SECTOR_SIZE / len(DAPS)):
+        return True
+
+    # mark the last DAPS invalid
+    invalidate_daps( DAPS(hd_image, daps_table + i*len(DAPS)) )
+
+    return True
 
 def check_for_valid_mbr(sector, size):
     if size < SECTOR_SIZE:
@@ -192,10 +273,13 @@ def barebox_overlay_mbr(fd_barebox, fd_hd, pers_sector_count):
 
     embed = PATCH_AREA
     indirect = (pers_sector_count + 1) * SECTOR_SIZE
+    print("indirect: %u" % indirect)
 
     fill_daps(DAPS(hd_image, embed), 1, INDIRECT_AREA, INDIRECT_SEGMENT, 1 + pers_sector_count)
 
-    barebox_linear_image(indirect, sb.st_size, pers_sector_count)
+    rc = barebox_linear_image(hd_image, indirect, sb.st_size, pers_sector_count)
+    if not rc:
+        return False
 
     store_pers_env_info(embed, 1, pers_sector_count)
 
