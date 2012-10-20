@@ -1,0 +1,6 @@
+Import('srcs')
+Import('config')
+Import('env')
+
+config.append_if_config(srcs, 'lib/lzo/lzo1x_compress.c',   "CONFIG_LZO_COMPRESS")
+config.append_if_config(srcs, 'lib/lzo/lzo1x_decompress.c', "CONFIG_LZO_DECOMPRESS")

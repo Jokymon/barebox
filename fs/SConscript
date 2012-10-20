@@ -1,0 +1,18 @@
+Import('srcs')
+Import('config')
+Import('env')
+
+if config.yes("CONFIG_FS_CRAMFS"):
+    SConscript(dirs=['cramfs'], exports='env')
+
+config.append_if_config(srcs, 'fs/ramfs.c', "CONFIG_FS_RAMFS")
+srcs.append('fs/devfs-core.c')
+config.append_if_config(srcs, 'fs/devfs.c', "CONFIG_FS_DEVFS")
+
+# TODO: add subdir fat/
+
+srcs.append('fs/fs.c')
+
+config.append_if_config(srcs, 'fs/tftp.c', "CONFIG_FS_TFTP")
+config.append_if_config(srcs, 'fs/nfs.c', "CONFIG_FS_NFS")
+

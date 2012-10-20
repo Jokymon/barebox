@@ -1,0 +1,3 @@
+Import('srcs')
+
+srcs.extend( ['fs/cramfs/cramfs.c', 'fs/cramfs/uncompress.c']
