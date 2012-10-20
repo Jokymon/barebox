@@ -18,9 +18,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
 #include <config.h>
@@ -654,7 +651,7 @@ BAREBOX_CMD_END
  */
 static int __init s3c24x0_nand_init(void)
 {
-	return register_driver(&s3c24x0_nand_driver);
+	return platform_driver_register(&s3c24x0_nand_driver);
 }
 
 device_initcall(s3c24x0_nand_init);

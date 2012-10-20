@@ -15,9 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include <common.h>
@@ -30,7 +27,7 @@
 
 #ifdef CONFIG_PBL_IMAGE
 /*
- * First function in the pbl image. We get here from
+ * First function in the uncompressed image. We get here from
  * the pbl.
  */
 void __naked __section(.text_entry) start(void)
@@ -47,31 +44,40 @@ void __naked __section(.text_entry) start(void)
 }
 #else
 
+/*
+ * First function in the image without pbl support
+ */
 void __naked __section(.text_entry) start(void)
 {
 	barebox_arm_head();
 }
 
 /*
+ * The actual reset vector. This code is position independent and usually
+ * does not run at the address it's linked at.
+ */
+#ifndef CONFIG_MACH_DO_LOWLEVEL_INIT
+void __naked __bare_init reset(void)
+{
+	common_reset();
+	board_init_lowlevel_return();
+}
+#endif
+
+/*
  * Board code can jump here by either returning from board_init_lowlevel
  * or by calling this function directly.
  */
-void __naked __section(.text_ll_return) board_init_lowlevel_return(void)
+void __naked board_init_lowlevel_return(void)
 {
-	uint32_t r, addr, offset;
-
-	/*
-	 * Get runtime address of this function. Do not
-	 * put any code above this.
-	 */
-	__asm__ __volatile__("1: adr %0, 1b":"=r"(addr));
+	uint32_t r, offset;
 
 	/* Setup the stack */
 	r = STACK_BASE + STACK_SIZE - 16;
 	__asm__ __volatile__("mov sp, %0" : : "r"(r));
 
 	/* Get offset between linked address and runtime address */
-	offset = (uint32_t)__ll_return - addr;
+	offset = get_runtime_offset();
 
 	/* relocate to link address if necessary */
 	if (offset)

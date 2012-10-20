@@ -15,16 +15,34 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 #include <common.h>
 #include <driver.h>
+#include <errno.h>
+#include <init.h>
 
 static int platform_match(struct device_d *dev, struct driver_d *drv)
 {
-	return strcmp(dev->name, drv->name) ? -1 : 0;
+	if (IS_ENABLED(CONFIG_OFDEVICE) && dev->device_node &&
+			drv->of_compatible)
+		return of_match(dev, drv);
+
+	if (!strcmp(dev->name, drv->name))
+		return 0;
+
+	if (drv->id_table) {
+		struct platform_device_id *id = drv->id_table;
+
+		while (id->name) {
+			if (!strcmp(id->name, dev->name)) {
+				dev->id_entry = id;
+				return 0;
+			}
+			id++;
+		}
+	}
+
+	return -1;
 }
 
 static int platform_probe(struct device_d *dev)
@@ -37,6 +55,20 @@ static void platform_remove(struct device_d *dev)
 	dev->driver->remove(dev);
 }
 
+int platform_driver_register(struct driver_d *drv)
+{
+	drv->bus = &platform_bus;
+
+	return register_driver(drv);
+}
+
+int platform_device_register(struct device_d *new_device)
+{
+	new_device->bus = &platform_bus;
+
+	return register_device(new_device);
+}
+
 struct bus_type platform_bus = {
 	.name = "platform",
 	.match = platform_match,
@@ -44,15 +76,8 @@ struct bus_type platform_bus = {
 	.remove = platform_remove,
 };
 
-#if 0
-LIST_HEAD(bus_list);
-EXPORT_SYMBOL(bus_list);
-
-int bus_register(struct bus_type *bus)
+static int plarform_init(void)
 {
-	list_add_tail(&bus->list, &bus_list);
-
-	return 0;
+	return bus_register(&platform_bus);
 }
-#endif
-
+pure_initcall(plarform_init);

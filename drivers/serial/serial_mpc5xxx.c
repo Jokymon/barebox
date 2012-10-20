@@ -15,10 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  *
  * Hacked for MPC8260 by Murray.Jensen@cmst.csiro.au, 19-Oct-00, with
  * changes based on the file arch/ppc/mbxboot/m8260_tty.c from the
@@ -173,7 +169,7 @@ static struct driver_d mpc5xxx_serial_driver = {
 
 static int mpc5xxx_serial_register(void)
 {
-	register_driver(&mpc5xxx_serial_driver);
+	platform_driver_register(&mpc5xxx_serial_driver);
 	return 0;
 }
 

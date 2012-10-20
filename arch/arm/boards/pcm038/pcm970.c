@@ -9,10 +9,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <common.h>
@@ -22,6 +18,7 @@
 #include <platform_ide.h>
 #include <mach/imx-regs.h>
 #include <mach/iomux-mx27.h>
+#include <mach/weim.h>
 #include <mach/gpio.h>
 #include <mach/devices-imx27.h>
 #include <usb/ulpi.h>
@@ -35,28 +32,28 @@ static void pcm970_usbh2_init(void)
 {
 	uint32_t temp;
 
-	temp = readl(IMX_OTG_BASE + 0x600);
+	temp = readl(MX27_USB_OTG_BASE_ADDR + 0x600);
 	temp &= ~((3 << 21) | 1);
 	temp |= (1 << 5) | (1 << 16) | (1 << 19) | (1 << 20);
-	writel(temp, IMX_OTG_BASE + 0x600);
+	writel(temp, MX27_USB_OTG_BASE_ADDR + 0x600);
 
-	temp = readl(IMX_OTG_BASE + 0x584);
+	temp = readl(MX27_USB_OTG_BASE_ADDR + 0x584);
 	temp &= ~(3 << 30);
 	temp |= 2 << 30;
-	writel(temp, IMX_OTG_BASE + 0x584);
+	writel(temp, MX27_USB_OTG_BASE_ADDR + 0x584);
 
 	mdelay(10);
 
-	if (!ulpi_setup((void *)(IMX_OTG_BASE + 0x570), 1))
-		add_generic_usb_ehci_device(DEVICE_ID_DYNAMIC, IMX_OTG_BASE + 0x400, NULL);
+	if (!ulpi_setup((void *)(MX27_USB_OTG_BASE_ADDR + 0x570), 1))
+		add_generic_usb_ehci_device(DEVICE_ID_DYNAMIC, MX27_USB_OTG_BASE_ADDR + 0x400, NULL);
 }
 #endif
 
 #ifdef CONFIG_DISK_INTF_PLATFORM_IDE
 static struct resource pcm970_ide_resources[] = {
 	{
-		.start	= IMX_PCMCIA_MEM_BASE,
-		.end	= IMX_PCMCIA_MEM_BASE + SZ_1K - 1,
+		.start	= MX27_PCMCIA_MEM_BASE_ADDR,
+		.end	= MX27_PCMCIA_MEM_BASE_ADDR + SZ_1K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 };
@@ -145,7 +142,7 @@ static void pcm970_ide_init(void)
 	/* Make PCMCIA bank0 valid */
 	writel(readl(PCMCIA_POR(0)) | (1 << 29), PCMCIA_POR(0));
 
-	register_device(&pcm970_ide_device);
+	platform_device_register(&pcm970_ide_device);
 }
 #endif
 

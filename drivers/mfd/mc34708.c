@@ -12,10 +12,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  *
  */
 
@@ -266,14 +262,10 @@ static int mc_probe(struct device_d *dev, enum mc34708_mode mode)
 	return 0;
 }
 
+#ifdef CONFIG_I2C
 static int mc_i2c_probe(struct device_d *dev)
 {
 	return mc_probe(dev, MC34708_MODE_I2C);
-}
-
-static int mc_spi_probe(struct device_d *dev)
-{
-	return mc_probe(dev, MC34708_MODE_SPI);
 }
 
 static struct driver_d mc_i2c_driver = {
@@ -281,16 +273,29 @@ static struct driver_d mc_i2c_driver = {
 	.probe = mc_i2c_probe,
 };
 
+static int mc_i2c_init(void)
+{
+	return i2c_register_driver(&mc_i2c_driver);
+}
+
+device_initcall(mc_i2c_init);
+#endif
+
+#ifdef CONFIG_SPI
+static int mc_spi_probe(struct device_d *dev)
+{
+	return mc_probe(dev, MC34708_MODE_SPI);
+}
+
 static struct driver_d mc_spi_driver = {
 	.name  = "mc34708-spi",
 	.probe = mc_spi_probe,
 };
 
-static int mc_init(void)
+static int mc_spi_init(void)
 {
-        register_driver(&mc_i2c_driver);
-        register_driver(&mc_spi_driver);
-        return 0;
+	return spi_register_driver(&mc_spi_driver);
 }
 
-device_initcall(mc_init);
+device_initcall(mc_spi_init);
+#endif

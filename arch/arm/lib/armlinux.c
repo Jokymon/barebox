@@ -14,11 +14,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307	 USA
- *
  */
 
 #include <boot.h>
@@ -80,7 +75,7 @@ void armlinux_set_revision(unsigned int rev)
 #ifdef CONFIG_ENVIRONMENT_VARIABLES
 	export_env_ull("armlinux_system_rev", rev);
 #else
-	return armlinux_system_rev;
+	armlinux_system_rev = rev;
 #endif
 }
 
@@ -264,6 +259,7 @@ void start_linux(void *adr, int swap, unsigned long initrd_address,
 		setup_tags(initrd_address, initrd_size, swap);
 		params = armlinux_bootparams;
 	}
+	architecture = armlinux_get_architecture();
 
 	shutdown_barebox();
 	if (swap) {
@@ -272,8 +268,6 @@ void start_linux(void *adr, int swap, unsigned long initrd_address,
 		reg ^= CR_B; /* swap big-endian flag */
 		__asm__ __volatile__("mcr p15, 0, %0, c1, c0" :: "r" (reg));
 	}
-
-	architecture = armlinux_get_architecture();
 
 #ifdef CONFIG_THUMB2_BAREBOX
 	__asm__ __volatile__ (

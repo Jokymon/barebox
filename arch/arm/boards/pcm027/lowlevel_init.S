@@ -21,16 +21,13 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <config.h>
 #include <mach/pxa-regs.h>
 #include <mach/regs-ost.h>
 #include <mach/regs-intc.h>
+#include <asm/barebox-arm-head.h>
 
 #define GPSR0		0x40E00018	/* GPIO Pin Output Set Register GPIO <31:00> */
 #define GPSR1		0x40E0001C	/* GPIO Pin Output Set Register GPIO <63:32> */
@@ -54,8 +51,10 @@
 /*
  *	Memory setup
  */
-.globl board_init_lowlevel
-board_init_lowlevel:
+.globl reset
+reset:
+	common_reset r0
+
 		@ Preserve r8/r7 i.e. kernel entry values
 
 		@ Data cache might be active.
@@ -453,4 +452,5 @@ initclks:
 	/* -------------------------------------------------------------------- */
 
 endlowlevel_init:
-	mov	pc, lr
+	b board_init_lowlevel_return
+

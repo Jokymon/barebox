@@ -12,10 +12,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 /**
@@ -24,6 +20,8 @@
  */
 #ifndef __INCLUDE_NETWORK_FEC_H
 #define __INCLUDE_NETWORK_FEC_H
+
+#include <linux/phy.h>
 
 /*
  * Supported phy types on this platform
@@ -43,6 +41,7 @@ typedef enum {
 struct fec_platform_data {
         xceiver_type	xcv_type;
 	int		phy_addr;
+	void 		(*phy_init)(struct phy_device *dev);
 };
 
 #endif /* __INCLUDE_NETWORK_FEC_H */

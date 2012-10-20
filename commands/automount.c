@@ -14,10 +14,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation.
  */
 #include <common.h>
 #include <command.h>
@@ -69,7 +65,7 @@ BAREBOX_CMD_HELP_END
 
 BAREBOX_CMD_START(automount)
 	.cmd		= do_automount,
-	.usage		= "automount [OPTIONS] <PATH> <cmd>\n",
+	.usage		= "automount [OPTIONS] <PATH> <cmd>",
 	BAREBOX_CMD_HELP(cmd_automount_help)
 BAREBOX_CMD_END
 

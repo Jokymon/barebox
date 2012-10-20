@@ -24,10 +24,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  *
  */
 
@@ -917,7 +913,6 @@ struct file_operations cfi_ops = {
 	.memmap  = generic_memmap_ro,
 };
 
-#ifdef CONFIG_PARTITION_NEED_MTD
 static int cfi_mtd_read(struct mtd_info *mtd, loff_t from, size_t len,
 		size_t *retlen, u_char *buf)
 {
@@ -977,11 +972,11 @@ static void cfi_init_mtd(struct flash_info *info)
 	mtd->flags = MTD_CAP_NORFLASH;
 	info->cdev.mtd = mtd;
 }
-#endif
 
 static int cfi_probe (struct device_d *dev)
 {
 	struct flash_info *info = xzalloc(sizeof(*info));
+	int cfinum;
 
 	dev->priv = (void *)info;
 
@@ -1000,30 +995,46 @@ static int cfi_probe (struct device_d *dev)
 	dev_info(dev, "found cfi flash at %p, size %ld\n",
 			info->base, info->size);
 
-	info->cdev.name = asprintf("nor%d", dev->id);
+	if (dev->id < 0)
+		cfinum = cdev_find_free_index("nor");
+	else
+		cfinum = dev->id;
+
+	info->cdev.name = asprintf("nor%d", cfinum);
 	info->cdev.size = info->size;
 	info->cdev.dev = dev;
 	info->cdev.ops = &cfi_ops;
 	info->cdev.priv = info;
 
-#ifdef CONFIG_PARTITION_NEED_MTD
-	cfi_init_mtd(info);
-#endif
+	if (IS_ENABLED(CONFIG_PARTITION_NEED_MTD))
+		cfi_init_mtd(info);
+
 	devfs_create(&info->cdev);
+
+	if (dev->device_node)
+		of_parse_partitions(info->cdev.name, dev->device_node);
 
 	return 0;
 }
 
+static __maybe_unused struct of_device_id cfi_dt_ids[] = {
+	{
+		.compatible = "cfi-flash",
+	}, {
+		/* sentinel */
+	}
+};
+
 static struct driver_d cfi_driver = {
-        .name    = "cfi_flash",
-        .probe   = cfi_probe,
-        .info    = cfi_info,
+	.name    = "cfi_flash",
+	.probe   = cfi_probe,
+	.info    = cfi_info,
+	.of_compatible = DRV_OF_COMPAT(cfi_dt_ids),
 };
 
 static int cfi_init(void)
 {
-        return register_driver(&cfi_driver);
+	return platform_driver_register(&cfi_driver);
 }
 
 device_initcall(cfi_init);
-

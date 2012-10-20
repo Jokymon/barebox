@@ -16,10 +16,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 /* #define DEBUG */
 #include <config.h>
@@ -238,7 +234,7 @@ static int mmc_init_setup(struct mci_host *mci, struct device_d *dev)
 	start = get_time_ns();
 	while ((readl(&mmc_base->sysstatus) & RESETDONE) == 0) {
 		if (is_timeout(start, SECOND)) {
-			dev_dbg(hsmmc->dev, "timedout waiting for cc2!\n");
+			dev_dbg(hsmmc->dev, "timeout waiting for reset done\n");
 			return -ETIMEDOUT;
 		}
 	}
@@ -603,7 +599,7 @@ static struct driver_d omap_mmc_driver = {
 
 static int omap_mmc_init_driver(void)
 {
-        register_driver(&omap_mmc_driver);
+        platform_driver_register(&omap_mmc_driver);
         return 0;
 }
 

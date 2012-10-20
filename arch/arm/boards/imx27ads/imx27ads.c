@@ -11,10 +11,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  *
  */
 
@@ -27,6 +23,7 @@
 #include <io.h>
 #include <fec.h>
 #include <mach/gpio.h>
+#include <mach/weim.h>
 #include <partition.h>
 #include <fs.h>
 #include <fcntl.h>
@@ -58,10 +55,10 @@ static int imx27ads_timing_init(void)
 	imx27_setup_weimcs(0, 0x23524E80, 0x10000D03, 0x00720900);
 
 	/* Select FEC data through data path */
-	writew(0x0020, IMX_CS4_BASE + 0x10);
+	writew(0x0020, MX27_CS4_BASE_ADDR + 0x10);
 
 	/* Enable CPLD FEC data path */
-	writew(0x0010, IMX_CS4_BASE + 0x14);
+	writew(0x0010, MX27_CS4_BASE_ADDR + 0x14);
 
 	return 0;
 }

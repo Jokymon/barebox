@@ -15,10 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <config.h>
@@ -145,7 +141,7 @@ int console_register(struct console_device *newcdev)
 	strcpy(dev->name, "cs");
 	if (newcdev->dev)
 		dev_add_child(newcdev->dev, dev);
-	register_device(dev);
+	platform_device_register(dev);
 
 	if (newcdev->setbrg) {
 		dev_add_param(dev, "baudrate", console_baudrate_set, NULL, 0);

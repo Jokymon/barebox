@@ -21,17 +21,12 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <common.h>
 #include <driver.h>
 #include <init.h>
-#include <mach/mpc5xxx.h>
-#include <mach/fec.h>
+#include <fec.h>
 #include <types.h>
 #include <partition.h>
 #include <memory.h>
@@ -39,7 +34,7 @@
 #include <linux/stat.h>
 #include <fs.h>
 
-static struct mpc5xxx_fec_platform_data fec_info = {
+static struct fec_platform_data fec_info = {
 	.xcv_type = MII100,
 };
 

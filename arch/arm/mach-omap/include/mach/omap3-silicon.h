@@ -30,10 +30,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #ifndef __ASM_ARCH_OMAP3_H
@@ -110,8 +106,6 @@
 #define OMAP_SRAM_BASE		0x40200000
 #define OMAP_SRAM_INTVECT	0x4020F800
 #define OMAP_SRAM_INTVECT_COPYSIZE	0x64
-/** Temporary stack for us to use C calls in low_level_init */
-#define OMAP_SRAM_STACK		0x4020FFFC
 
 /** Gives the silicon revision */
 #define OMAP_TAP_BASE		(OMAP_L4_WKUP_BASE + 0xA000)

@@ -18,19 +18,14 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <mach/ep93xx-regs.h>
+#include <asm/barebox-arm-head.h>
 
-.globl board_init_lowlevel
-board_init_lowlevel:
-	/* backup return address */
-	ldr r1, =SYSCON_SCRATCH0
-	str lr, [r1]
+.globl reset
+reset:
+	common_reset r0
 
 	/* Turn on both LEDs */
 	bl red_LED_on
@@ -57,8 +52,4 @@ board_init_lowlevel:
 	orr r0, r0, #0xc0000000
 	mcr p15, 0, r0, c1, c0, 0
 
-	/* restore return address */
-	ldr r1, =SYSCON_SCRATCH0
-	ldr lr, [r1]
-
-	mov pc, lr
+	b board_init_lowlevel_return

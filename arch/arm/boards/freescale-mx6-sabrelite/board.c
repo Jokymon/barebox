@@ -12,11 +12,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation.
- *
  */
 
 #include <common.h>
@@ -28,7 +23,7 @@
 #include <asm/armlinux.h>
 #include <generated/mach-types.h>
 #include <partition.h>
-#include <miidev.h>
+#include <linux/phy.h>
 #include <asm/io.h>
 #include <asm/mmu.h>
 #include <mach/generic.h>
@@ -40,6 +35,7 @@
 #include <mach/gpio.h>
 #include <spi/spi.h>
 #include <mach/spi.h>
+#include <mach/usb.h>
 
 #define SABRELITE_SD3_WP	IMX_GPIO_NR(7, 1)
 #define SABRELITE_SD3_CD	IMX_GPIO_NR(7, 0)
@@ -135,37 +131,26 @@ static int sabrelite_mem_init(void)
 }
 mem_initcall(sabrelite_mem_init);
 
-static struct fec_platform_data fec_info = {
-	.xcv_type = RGMII,
-	.phy_addr = 6,
-};
-
-int mx6_rgmii_rework(void)
+static void mx6_rgmii_rework(struct phy_device *dev)
 {
-	struct mii_device *mdev;
-
-	mdev = mii_open("phy0");
-	if (!mdev) {
-		printf("unable to open phy0\n");
-		return -ENODEV;
-	}
-
-	mii_write(mdev, mdev->address, 0x09, 0x0f00);
+	phy_write(dev, 0x09, 0x0f00);
 
 	/* do same as linux kernel */
 	/* min rx data delay */
-	mii_write(mdev, mdev->address, 0x0b, 0x8105);
-	mii_write(mdev, mdev->address, 0x0c, 0x0000);
+	phy_write(dev, 0x0b, 0x8105);
+	phy_write(dev, 0x0c, 0x0000);
 
 	/* max rx/tx clock delay, min rx/tx control delay */
-	mii_write(mdev, mdev->address, 0x0b, 0x8104);
-	mii_write(mdev, mdev->address, 0x0c, 0xf0f0);
-	mii_write(mdev, mdev->address, 0x0b, 0x104);
-
-	mii_close(mdev);
-
-	return 0;
+	phy_write(dev, 0x0b, 0x8104);
+	phy_write(dev, 0x0c, 0xf0f0);
+	phy_write(dev, 0x0b, 0x104);
 }
+
+static struct fec_platform_data fec_info = {
+	.xcv_type = RGMII,
+	.phy_init = mx6_rgmii_rework,
+	.phy_addr = 6,
+};
 
 static int sabrelite_ksz9021rn_setup(void)
 {
@@ -265,7 +250,6 @@ static int sabrelite_devices_init(void)
 	sabrelite_ksz9021rn_setup();
 	imx6_iim_register_fec_ethaddr();
 	imx6_add_fec(&fec_info);
-	mx6_rgmii_rework();
 
 	sabrelite_ehci_init();
 

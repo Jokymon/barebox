@@ -15,10 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <common.h>
@@ -63,7 +59,7 @@ struct device_d *add_generic_device_res(const char* devname, int id,
 	dev->resource = res;
 	dev->num_resources = nb;
 
-	register_device(dev);
+	platform_device_register(dev);
 
 	return dev;
 }

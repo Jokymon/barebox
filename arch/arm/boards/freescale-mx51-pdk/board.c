@@ -11,10 +11,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  *
  */
 
@@ -231,9 +227,11 @@ static void babbage_power_init(void)
 	val = 0x49249;
 	mc13xxx_reg_write(mc13xxx, MC13892_REG_MODE_1, val);
 
-	udelay(500);
+	udelay(200);
 
 	gpio_set_value(GPIO_LAN8700_RESET, 1);
+
+	mdelay(50);
 }
 
 static int f3s_devices_init(void)

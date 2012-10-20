@@ -14,16 +14,13 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #ifndef	__LINUX_USB_USBNET_H
 #define	__LINUX_USB_USBNET_H
 
 #include <net.h>
-#include <miidev.h>
+#include <linux/phy.h>
 
 /* interface from usbnet core to each USB networking link we handle */
 struct usbnet {
@@ -40,7 +37,8 @@ struct usbnet {
 
 	/* protocol/interface state */
 	struct eth_device	edev;
-	struct mii_device	miidev;
+	struct mii_bus	miibus;
+	int			phy_addr;
 
 	int			msg_enable;
 	unsigned long		data [5];

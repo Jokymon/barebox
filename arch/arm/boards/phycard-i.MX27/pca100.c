@@ -11,10 +11,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  *
  */
 
@@ -140,10 +136,10 @@ static void pca100_usb_register(void)
 
 	mdelay(10);
 
-	ulpi_setup((void *)(IMX_OTG_BASE + 0x170), 1);
-	add_generic_usb_ehci_device(DEVICE_ID_DYNAMIC, IMX_OTG_BASE, NULL);
-	ulpi_setup((void *)(IMX_OTG_BASE + 0x570), 1);
-	add_generic_usb_ehci_device(DEVICE_ID_DYNAMIC, IMX_OTG_BASE + 0x400, NULL);
+	ulpi_setup((void *)(MX27_USB_OTG_BASE_ADDR + 0x170), 1);
+	add_generic_usb_ehci_device(DEVICE_ID_DYNAMIC, MX27_USB_OTG_BASE_ADDR, NULL);
+	ulpi_setup((void *)(MX27_USB_OTG_BASE_ADDR + 0x570), 1);
+	add_generic_usb_ehci_device(DEVICE_ID_DYNAMIC, MX27_USB_OTG_BASE_ADDR + 0x400, NULL);
 }
 #endif
 
@@ -159,10 +155,10 @@ static void pca100_usb_init(void)
 {
 	u32 reg;
 
-	reg = readl(IMX_OTG_BASE + 0x600);
+	reg = readl(MX27_USB_OTG_BASE_ADDR + 0x600);
 	reg &= ~((3 << 21) | 1);
 	reg |= (1 << 5) | (1 << 16) | (1 << 19) | (1 << 11) | (1 << 20);
-	writel(reg, IMX_OTG_BASE + 0x600);
+	writel(reg, MX27_USB_OTG_BASE_ADDR + 0x600);
 
 	/*
 	 * switch usbotg and usbh2 to ulpi mode. Do this *before*
@@ -170,15 +166,15 @@ static void pca100_usb_init(void)
 	 * triggering. Also, do this even when USB support is
 	 * disabled to give Linux USB support a good start.
 	 */
-	reg = readl(IMX_OTG_BASE + 0x584);
+	reg = readl(MX27_USB_OTG_BASE_ADDR + 0x584);
 	reg &= ~(3 << 30);
 	reg |= 2 << 30;
-	writel(reg, IMX_OTG_BASE + 0x584);
+	writel(reg, MX27_USB_OTG_BASE_ADDR + 0x584);
 
-	reg = readl(IMX_OTG_BASE + 0x184);
+	reg = readl(MX27_USB_OTG_BASE_ADDR + 0x184);
 	reg &= ~(3 << 30);
 	reg |= 2 << 30;
-	writel(reg, IMX_OTG_BASE + 0x184);
+	writel(reg, MX27_USB_OTG_BASE_ADDR + 0x184);
 
 	/* disable the usb phys */
 	imx_gpio_mode((GPIO_PORTB | 23) | GPIO_GPIO | GPIO_IN);
@@ -324,11 +320,3 @@ static int pca100_console_init(void)
 }
 
 console_initcall(pca100_console_init);
-
-#ifdef CONFIG_NAND_IMX_BOOT
-void __bare_init nand_boot(void)
-{
-	imx_nand_load_image(_text, barebox_image_size);
-}
-#endif
-

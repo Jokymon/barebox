@@ -92,6 +92,7 @@ board-$(CONFIG_MACH_FREESCALE_MX25_3STACK)	:= freescale-mx25-3-stack
 board-$(CONFIG_MACH_FREESCALE_MX35_3STACK)	:= freescale-mx35-3-stack
 board-$(CONFIG_MACH_IMX21ADS)			:= imx21ads
 board-$(CONFIG_MACH_IMX27ADS)			:= imx27ads
+board-$(CONFIG_MACH_IMX233_OLINUXINO)	:= imx233-olinuxino
 board-$(CONFIG_MACH_MIOA701)			:= mioa701
 board-$(CONFIG_MACH_MMCCPU)			:= mmccpu
 board-$(CONFIG_MACH_NOMADIK_8815NHK)		:= nhk8815
@@ -141,6 +142,7 @@ board-$(CONFIG_MACH_TOSHIBA_AC100)		:= toshiba-ac100
 board-$(CONFIG_MACH_CCMX51)			:= ccxmx51
 board-$(CONFIG_MACH_TINY210)			:= friendlyarm-tiny210
 board-$(CONFIG_MACH_SABRELITE)			:= freescale-mx6-sabrelite
+board-$(CONFIG_MACH_TX53)			:= karo-tx53
 
 machdirs := $(patsubst %,arch/arm/mach-%/,$(machine-y))
 
@@ -179,7 +181,7 @@ barebox.netx: $(KBUILD_BINARY)
 
 ifeq ($(machine-y),netx)
 KBUILD_TARGET := barebox.netx
-KBUILD_BINARY := $(KBUILD_TARGET)
+KBUILD_IMAGE := barebox.netx
 endif
 
 barebox.s5p: $(KBUILD_BINARY)
@@ -187,7 +189,7 @@ barebox.s5p: $(KBUILD_BINARY)
 
 ifeq ($(CONFIG_ARCH_S5PCxx),y)
 KBUILD_TARGET := barebox.s5p
-KBUILD_BINARY := $(KBUILD_TARGET)
+KBUILD_IMAGE := barebox.s5p
 endif
 
 quiet_cmd_mlo ?= IFT     $@
@@ -199,17 +201,31 @@ MLO: $(KBUILD_BINARY)
 
 ifeq ($(CONFIG_OMAP_BUILD_IFT),y)
 KBUILD_TARGET := MLO
-KBUILD_BINARY := $(KBUILD_TARGET)
+KBUILD_IMAGE := MLO
 endif
 
-barebox.ubl: $(KBUILD_BINARY)
-	@echo "  UBL    " $@
-	$(Q)scripts/mkublheader $< > barebox.ubl
-	$(Q)cat $< >> barebox.ubl
+quiet_cmd_davinci_ubl_image = UBL-IMG $@
+      cmd_davinci_ubl_image = set -e; \
+	 scripts/mkublheader $< > $@; \
+	 cat $< >> $@
+
+barebox.ubl: $(KBUILD_BINARY) FORCE
+	$(call if_changed,davinci_ubl_image)
 
 ifeq ($(CONFIG_ARCH_DAVINCI),y)
 KBUILD_TARGET := barebox.ubl
-KBUILD_BINARY := $(KBUILD_TARGET)
+KBUILD_IMAGE := barebox.ubl
+endif
+
+quiet_cmd_am35xx_spi_image = SPI-IMG $@
+      cmd_am35xx_spi_image = scripts/mk-am35xx-spi-image $< > $@
+
+barebox.spi: $(KBUILD_BINARY) FORCE
+	$(call if_changed,am35xx_spi_image)
+
+ifeq ($(CONFIG_OMAP_BUILD_SPI),y)
+KBUILD_TARGET := barebox.spi
+KBUILD_IMAGE := barebox.spi
 endif
 
 pbl := arch/arm/pbl
@@ -219,7 +235,7 @@ zbarebox.S zbarebox.bin zbarebox: barebox.bin
 archclean:
 	$(MAKE) $(clean)=$(pbl)
 
-KBUILD_IMAGE := $(KBUILD_BINARY)
+KBUILD_IMAGE ?= $(KBUILD_BINARY)
 
 archprepare: maketools
 maketools:

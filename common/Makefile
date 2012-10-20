@@ -19,6 +19,7 @@ obj-$(CONFIG_MALLOC_TLSF) += tlsf.o
 obj-$(CONFIG_MALLOC_DUMMY) += dummy_malloc.o
 obj-y += clock.o
 obj-$(CONFIG_BANNER) += version.o
+obj-$(CONFIG_MEMINFO) += meminfo.o
 obj-$(CONFIG_COMMAND_SUPPORT) += command.o
 obj-$(CONFIG_CONSOLE_FULL) += console.o
 obj-$(CONFIG_CONSOLE_SIMPLE) += console_simple.o
@@ -38,10 +39,11 @@ obj-$(CONFIG_PASSWORD) += password.o
 obj-$(CONFIG_MODULES) += module.o
 obj-$(CONFIG_FLEXIBLE_BOOTARGS) += bootargs.o
 extra-$(CONFIG_MODULES) += module.lds
+extra-y += barebox_default_env barebox_default_env.h
 
 ifdef CONFIG_DEFAULT_ENVIRONMENT
-$(obj)/startup.o: include/generated/barebox_default_env.h
-$(obj)/env.o: include/generated/barebox_default_env.h
+$(obj)/startup.o: $(obj)/barebox_default_env.h
+$(obj)/env.o: $(obj)/barebox_default_env.h
 
 ifeq ($(CONFIG_DEFAULT_ENVIRONMENT_GENERIC_NEW),y)
 DEFAULT_ENVIRONMENT_PATH = "defaultenv-2/base"
@@ -62,8 +64,19 @@ ENV_FILES := $(shell cd $(srctree); for i in $(DEFAULT_ENVIRONMENT_PATH); do fin
 
 endif # ifdef CONFIG_DEFAULT_ENVIRONMENT
 
-barebox_default_env: $(ENV_FILES)
-	$(Q)$(srctree)/scripts/genenv $(srctree) $(objtree) $(DEFAULT_ENVIRONMENT_PATH)
+#
+# Generate a barebox envfs image.
+#
+# echo $(ENV_FILES) > /dev/null is just for letting if_changed
+# recognize that something has changed when the environment has
+# other files,
+#
+quiet_cmd_env = ENV     $@
+cmd_env = ($(srctree)/scripts/genenv $(srctree) $(objtree) $@ $(DEFAULT_ENVIRONMENT_PATH)) || \
+	(echo $(ENV_FILES) > /dev/null; rm -f $@ ; false)
+
+$(obj)/barebox_default_env: $(ENV_FILES) FORCE
+	$(call if_changed,env)
 
 barebox_default_env_comp =
 ifeq ($(CONFIG_DEFAULT_ENVIRONMENT_COMPRESSED_GZIP),y)
@@ -76,22 +89,21 @@ ifeq ($(CONFIG_DEFAULT_ENVIRONMENT_COMPRESSED_LZO),y)
 barebox_default_env_comp = .lzo
 endif
 
-barebox_default_env.gz: barebox_default_env
+$(obj)/barebox_default_env.gz: $(obj)/barebox_default_env FORCE
 	$(call if_changed,gzip)
 
-barebox_default_env.bz2: barebox_default_env
+$(obj)/barebox_default_env.bz2: $(obj)/barebox_default_env FORCE
 	$(call if_changed,bzip2)
 
-barebox_default_env.lzo: barebox_default_env
+$(obj)/barebox_default_env.lzo: $(obj)/barebox_default_env FORCE
 	$(call if_changed,lzo)
 
-include/generated/barebox_default_env.h: barebox_default_env$(barebox_default_env_comp)
-	$(Q)cat $< | $(objtree)/scripts/bin2c default_environment > $@
-	$(Q)echo "const int default_environment_uncompress_size=`stat -c%s barebox_default_env`;" >> $@
+quiet_cmd_env_h = ENVH    $@
+cmd_env_h = cat $< | (cd $(obj) && $(objtree)/scripts/bin2c default_environment) > $@; \
+	echo "const int default_environment_uncompress_size=`stat -c%s $(obj)/barebox_default_env`;" >> $@
 
-CLEAN_FILES += include/generated/barebox_default_env.h barebox_default_env
-CLEAN_FILES += barebox_default_env.gz barebox_default_env.bz2
-CLEAN_FILES += barebox_default_env.lzo
+$(obj)/barebox_default_env.h: $(obj)/barebox_default_env$(barebox_default_env_comp) FORCE
+	$(call if_changed,env_h)
 
 # dependencies on generated files need to be listed explicitly
 $(obj)/version.o: include/generated/compile.h

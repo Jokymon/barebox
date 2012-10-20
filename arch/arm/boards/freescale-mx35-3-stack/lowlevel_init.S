@@ -15,10 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <mach/imx-regs.h>
@@ -26,6 +22,8 @@
 #include <mach/esdctl.h>
 #include <asm/cache-l2x0.h>
 #include <asm-generic/memory_layout.h>
+#include <asm/barebox-arm-head.h>
+
 #include "board-mx35_3stack.h"
 
 #define CSD0_BASE_ADDR		0x80000000
@@ -56,11 +54,11 @@ CCM_PDR0_W:		.word	0x00001000
 MPCTL_PARAM_399_W:	.word	MPCTL_PARAM_399
 MPCTL_PARAM_532_W:	.word	MPCTL_PARAM_532
 PPCTL_PARAM_W:		.word	PPCTL_PARAM_300
-CCM_BASE_ADDR_W:	.word	IMX_CCM_BASE
+CCM_BASE_ADDR_W:	.word	MX35_CCM_BASE_ADDR
 
-.globl board_init_lowlevel
-board_init_lowlevel:
-	mov	r10, lr
+.globl reset
+reset:
+	common_reset r0
 
 	mrc	15, 0, r1, c1, c0, 0
 
@@ -128,7 +126,7 @@ board_init_lowlevel:
 	cmp	pc, #CSD1_BASE_ADDR
 	bhi	1f
 
-	mov	pc, r10
+	b	board_init_lowlevel_return
 
 1:
 	ldr	r0, =ESDCTL_BASE_ADDR
@@ -159,8 +157,8 @@ board_init_lowlevel:
 #ifdef CONFIG_NAND_IMX_BOOT
 	ldr	sp, =STACK_BASE + STACK_SIZE - 12		/* Setup a temporary stack in SDRAM */
 
-	ldr	r0, =IMX_NFC_BASE		/* start of NFC SRAM */
-	ldr	r2, =IMX_NFC_BASE + 0x800	/* end of NFC SRAM */
+	ldr	r0, =MX35_NFC_BASE_ADDR		/* start of NFC SRAM */
+	ldr	r2, =MX35_NFC_BASE_ADDR + 0x800	/* end of NFC SRAM */
 
 	/* skip NAND boot if not running from NFC space */
 	cmp	pc, r0
@@ -183,7 +181,7 @@ copy_loop:
 ret:
 #endif /* CONFIG_NAND_IMX_BOOT */
 
-	mov	pc, r10
+	b	board_init_lowlevel_return
 
 /*
  * r0: ESDCTL control base, r1: sdram slot base

@@ -29,10 +29,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 #include <common.h>
 #include <init.h>
@@ -515,3 +511,22 @@ const struct gpmc_config omap3_nand_cfg = {
 	.base = 0x28000000,
 	.size = GPMC_SIZE_16M,
 };
+
+static int omap3_gpio_init(void)
+{
+	add_generic_device("omap-gpio", 0, NULL, 0x48310000,
+					0xf00, IORESOURCE_MEM, NULL);
+	add_generic_device("omap-gpio", 1, NULL, 0x49050000,
+					0xf00, IORESOURCE_MEM, NULL);
+	add_generic_device("omap-gpio", 2, NULL, 0x49052000,
+					0xf00, IORESOURCE_MEM, NULL);
+	add_generic_device("omap-gpio", 3, NULL, 0x49054000,
+					0xf00, IORESOURCE_MEM, NULL);
+	add_generic_device("omap-gpio", 4, NULL, 0x49056000,
+					0xf00, IORESOURCE_MEM, NULL);
+	add_generic_device("omap-gpio", 5, NULL, 0x49058000,
+					0xf00, IORESOURCE_MEM, NULL);
+
+	return 0;
+}
+coredevice_initcall(omap3_gpio_init);

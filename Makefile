@@ -1,5 +1,5 @@
 VERSION = 2012
-PATCHLEVEL = 09
+PATCHLEVEL = 10
 SUBLEVEL = 0
 EXTRAVERSION =
 NAME = Amissive Actinocutious Kiwi
@@ -462,14 +462,20 @@ CFLAGS += $(call cc-option,-Wdeclaration-after-statement,)
 # disable pointer signed / unsigned warnings in gcc 4.0
 CFLAGS += $(call cc-option,-Wno-pointer-sign,)
 
-# Default kernel image to build when no specific target is given.
-# KBUILD_IMAGE may be overruled on the command line or
-# set in the environment
-# Also any assignments in arch/$(ARCH)/Makefile take precedence over
-# this default value
+# KBUILD_IMAGE: Default barebox image to build
+# Depending on the architecture, this can be either compressed or not.
+# It will also include any necessary headers to be bootable.
 export KBUILD_IMAGE ?= barebox.bin
+# KBUILD_BINARY: Raw barebox binary
+# This variable is set in case the architecture prepends a header and
+# points to a binary that can be loaded directly into RAM and executed.
+export KBUILD_BINARY ?= barebox.bin
+# KBUILD_IMAGE and _BINARY may be overruled on the command line or
+# set in the environment.
+# Also any assignments in arch/$(ARCH)/Makefile take precedence over
+# the default value.
 
-barebox-flash-image: $(KBUILD_IMAGE)
+barebox-flash-image: $(KBUILD_IMAGE) FORCE
 	$(call if_changed,ln)
 
 all: barebox-flash-image
@@ -679,6 +685,22 @@ barebox.bin: barebox FORCE
 ifndef CONFIG_PBL_IMAGE
 	$(call cmd,check_file_size,$(CONFIG_BAREBOX_MAX_IMAGE_SIZE))
 endif
+
+# By default the uImage load address is 2MB below CONFIG_TEXT_BASE,
+# leaving space for the compressed PBL image at 1MB below CONFIG_TEXT_BASE.
+UIMAGE_BASE ?= $(shell printf "0x%08x" $$(($(CONFIG_TEXT_BASE) - 0x200000)))
+
+# For development provide a target which makes barebox loadable by an
+# unmodified u-boot
+quiet_cmd_barebox_mkimage = MKIMAGE $@
+      cmd_barebox_mkimage = $(srctree)/scripts/mkimage -A $(ARCH) -T firmware -C none \
+       -O barebox -a $(UIMAGE_BASE) -e $(UIMAGE_BASE) \
+       -n "barebox $(KERNELRELEASE)" -d $< $@
+
+# barebox.uimage is build from the raw barebox binary, without any other
+# headers.
+barebox.uimage: $(KBUILD_BINARY) FORCE
+	$(call if_changed,barebox_mkimage)
 
 ifdef CONFIG_X86
 barebox.S: barebox
@@ -1007,9 +1029,10 @@ endif # CONFIG_MODULES
 CLEAN_DIRS  += $(MODVERDIR)
 CLEAN_FILES +=	barebox System.map include/generated/barebox_default_env.h \
                 .tmp_version .tmp_barebox* barebox.bin barebox.map barebox.S \
-		.tmp_kallsyms* barebox_default_env* barebox.ldr \
+		.tmp_kallsyms* common/barebox_default_env* barebox.ldr \
 		scripts/bareboxenv-target barebox-flash-image \
-		Doxyfile.version barebox.srec barebox.s5p
+		Doxyfile.version barebox.srec barebox.s5p barebox.ubl \
+		barebox.uimage barebox.spi
 
 # Directories & files removed with 'make mrproper'
 MRPROPER_DIRS  += include/config include2 usr/include

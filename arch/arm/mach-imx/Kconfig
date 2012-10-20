@@ -27,6 +27,7 @@ config ARCH_TEXT_BASE
 	default 0x4fc00000 if MACH_MX6Q_ARM2
 	default 0x97f00000 if MACH_CCMX51
 	default 0x4fc00000 if MACH_SABRELITE
+	default 0x7fe00000 if MACH_TX53
 
 config BOARDINFO
 	default "Eukrea CPUIMX25" if MACH_EUKREA_CPUIMX25
@@ -53,6 +54,7 @@ config BOARDINFO
 	default "Freescale i.MX6q armadillo2" if MACH_MX6Q_ARM2
 	default "ConnectCore i.MX51" if MACH_CCMX51
 	default "Sabre Lite" if MACH_SABRELITE
+	default "Ka-Ro tx53" if MACH_TX53
 
 choice
 	prompt "Select boot mode"
@@ -459,6 +461,12 @@ config MACH_TQMA53_1GB_RAM
 	help
 	  use 1GiB of SDRAM (512MiB otherwise)
 
+config MACH_TX53
+	bool "Ka-Ro TX53"
+	select HAVE_DEFAULT_ENVIRONMENT_NEW
+	help
+	  Say Y here if you are using the Ka-Ro tx53 board
+
 endchoice
 
 endif
@@ -543,14 +551,6 @@ endif
 endmenu
 
 menu "i.MX specific settings        "
-
-config IMX_CLKO
-	bool "clko command"
-	depends on ARCH_IMX21 || ARCH_IMX27 || ARCH_IMX35 || ARCH_IMX25 || ARCH_IMX51
-	help
-	  The i.MX SoCs have a Pin which can output different reference frequencies.
-	  Say y here if you want to have the clko command which lets you select the
-	  frequency to output on this pin.
 
 config IMX_IIM
 	tristate "IIM fusebox device"

@@ -13,11 +13,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307,
- * USA.
- *
  * Author:
  *	Darius Augulis, Teltonika Inc.
  *
@@ -42,7 +37,7 @@
 #include <malloc.h>
 #include <types.h>
 #include <xfuncs.h>
-
+#include <linux/clk.h>
 #include <linux/err.h>
 
 #include <io.h>
@@ -106,6 +101,7 @@ static u16 i2c_clk_div[50][2] = {
 
 struct fsl_i2c_struct {
 	void __iomem		*base;
+	struct clk		*clk;
 	struct i2c_adapter	adapter;
 	unsigned int 		disable_delay;
 	int			stopped;
@@ -349,7 +345,7 @@ static void i2c_fsl_set_clk(struct fsl_i2c_struct *i2c_fsl,
 	int i;
 
 	/* Divider value calculation */
-	i2c_clk_rate = fsl_get_i2cclk();
+	i2c_clk_rate = clk_get_rate(i2c_fsl->clk);
 	div = (i2c_clk_rate + rate - 1) / rate;
 	if (div < i2c_clk_div[0][0])
 		i = 0;
@@ -540,6 +536,11 @@ static int __init i2c_fsl_probe(struct device_d *pdev)
 
 	i2c_fsl = kzalloc(sizeof(struct fsl_i2c_struct), GFP_KERNEL);
 
+#ifdef CONFIG_COMMON_CLK
+	i2c_fsl->clk = clk_get(pdev, NULL);
+	if (IS_ERR(i2c_fsl->clk))
+		return PTR_ERR(i2c_fsl->clk);
+#endif
 	/* Setup i2c_fsl driver structure */
 	i2c_fsl->adapter.master_xfer = i2c_fsl_xfer;
 	i2c_fsl->adapter.nr = pdev->id;
@@ -578,6 +579,6 @@ static struct driver_d i2c_fsl_driver = {
 
 static int __init i2c_adap_fsl_init(void)
 {
-	return register_driver(&i2c_fsl_driver);
+	return platform_driver_register(&i2c_fsl_driver);
 }
 device_initcall(i2c_adap_fsl_init);

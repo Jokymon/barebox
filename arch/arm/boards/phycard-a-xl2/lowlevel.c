@@ -15,10 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 #include <common.h>
 #include <io.h>
@@ -27,6 +23,7 @@
 #include <mach/omap4-clock.h>
 #include <mach/syslib.h>
 #include <asm/barebox-arm.h>
+#include <asm/barebox-arm-head.h>
 
 #define TPS62361_VSEL0_GPIO    7
 
@@ -87,12 +84,14 @@ static noinline void pcaaxl2_init_lowlevel(void)
 	board_init_lowlevel_return();
 }
 
-void board_init_lowlevel(void)
+void reset(void)
 {
 	u32 r;
 
+	common_reset();
+
 	if (get_pc() > 0x80000000)
-		return;
+		board_init_lowlevel_return();
 
 	r = 0x4030d000;
 	__asm__ __volatile__("mov sp, %0" : : "r"(r));

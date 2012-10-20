@@ -1,6 +1,6 @@
 #!/bin/sh
 
-hostname=pcaal1
+global.hostname=pcaal1
 #user=
 
 # Enter MAC address here if not retrieved automatically
@@ -26,26 +26,26 @@ rootfs_loc=nand
 rootfs_type=jffs2
 # where is the rootfs in case of 'rootfs_loc=disk' (linux name)
 rootfs_part_linux_dev=mmcblk0p4
-rootfsimage=rootfs-${hostname}.$rootfs_type
+rootfsimage=rootfs-${global.hostname}.$rootfs_type
 
 # where is the kernel image in case of 'kernel_loc=disk'
 kernel_part=disk0.2
 
 # The image type of the kernel. Can be uimage, zimage, raw or raw_lzo
-#kernelimage=zImage-$hostname
-kernelimage=uImage-$hostname
-#kernelimage=Image-$hostname
-#kernelimage=Image-$hostname.lzo
+#kernelimage=zImage-${global.hostname}
+kernelimage=uImage-${global.hostname}
+#kernelimage=Image-${global.hostname}
+#kernelimage=Image-${global.hostname}.lzo
 
-bareboximage=barebox-${hostname}.bin
-bareboxenvimage=barebox-${hostname}.bin
+bareboximage=barebox-${global.hostname}.bin
+bareboxenvimage=barebox-${global.hostname}.bin
 
 if [ -n $user ]; then
 	bareboximage="$user"-"$bareboximage"
 	bareboxenvimage="$user"-"$bareboxenvimage"
 	kernelimage="$user"-"$kernelimage"
 	rootfsimage="$user"-"$rootfsimage"
-	nfsroot="/home/$user/nfsroot/$hostname"
+	nfsroot="/home/$user/nfsroot/${global.hostname}"
 else
 	nfsroot="/path/to/nfs/root"
 fi
@@ -70,7 +70,7 @@ bootargs="$bootargs omapdss.def_disp=pd050vl1"
 #bootargs="$bootargs omapdss.def_disp=pd104slf"
 #bootargs="$bootargs omapdss.def_disp=pm070wl4"
 
-nand_parts="512k(x-loader)ro,1920k(barebox),128k(bareboxenv),4M(kernel),-(root)"
+nand_parts="128k(x-loader)ro,512k(barebox),128k(bareboxenv),4M(kernel),-(root)"
 nand_device=omap2-nand.0
 rootfs_mtdblock_nand=4
 

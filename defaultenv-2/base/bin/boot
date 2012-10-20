@@ -33,6 +33,10 @@ while getopt "vdhl" opt; do
 	fi
 done
 
+# clear linux.bootargs.dyn.* and bootm.*
+global -r linux.bootargs.dyn.
+global -r bootm.
+
 if [ $# = 0 ]; then
 	scr="$global.boot.default"
 else
@@ -41,7 +45,7 @@ fi
 
 if [ -n "$scr" ]; then
 	if [ ! -f /env/boot/$scr ]; then
-		echo -e "/env/boot/$scr does not exist.Valid choices:\n$sources"
+		echo -e "/env/boot/$scr does not exist. Valid choices:\n$sources"
 		exit
 	fi
 	/env/boot/$scr

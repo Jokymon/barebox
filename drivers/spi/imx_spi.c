@@ -11,10 +11,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  *
  */
 
@@ -24,10 +20,13 @@
 #include <spi/spi.h>
 #include <xfuncs.h>
 #include <io.h>
+#include <errno.h>
+#include <malloc.h>
 #include <gpio.h>
 #include <mach/spi.h>
 #include <mach/generic.h>
-#include <mach/clock.h>
+#include <linux/clk.h>
+#include <linux/err.h>
 
 #define CSPI_0_0_RXDATA		0x00
 #define CSPI_0_0_TXDATA		0x04
@@ -131,6 +130,7 @@ struct imx_spi {
 	struct spi_master	master;
 	int			*cs_array;
 	void __iomem		*regs;
+	struct clk		*clk;
 
 	unsigned int		(*xchg_single)(struct imx_spi *imx, u32 data);
 	void			(*chipselect)(struct spi_device *spi, int active);
@@ -279,7 +279,7 @@ static void cspi_0_7_chipselect(struct spi_device *spi, int is_active)
 		return;
 	}
 
-	reg |= spi_imx_clkdiv_2(imx_get_cspiclk(), spi->max_speed_hz) <<
+	reg |= spi_imx_clkdiv_2(clk_get_rate(imx->clk), spi->max_speed_hz) <<
 		CSPI_0_7_CTRL_DR_SHIFT;
 
 	reg |= (spi->bits_per_word - 1) << CSPI_0_7_CTRL_BL_SHIFT;
@@ -384,7 +384,7 @@ static void cspi_2_3_chipselect(struct spi_device *spi, int is_active)
 	ctrl |= CSPI_2_3_CTRL_MODE(cs);
 
 	/* set clock speed */
-	ctrl |= cspi_2_3_clkdiv(imx_get_cspiclk(), spi->max_speed_hz);
+	ctrl |= cspi_2_3_clkdiv(clk_get_rate(imx->clk), spi->max_speed_hz);
 
 	/* set chip select to use */
 	ctrl |= CSPI_2_3_CTRL_CS(cs);
@@ -495,12 +495,39 @@ static struct spi_imx_devtype_data spi_imx_devtype_data[] = {
 #endif
 };
 
+static int imx_spi_dt_probe(struct imx_spi *imx)
+{
+	struct device_node *node = imx->master.dev->device_node;
+	int ret, i;
+	u32 num_cs;
+
+	if (!node)
+		return -ENODEV;
+
+	ret = of_property_read_u32(node, "fsl,spi-num-chipselects", &num_cs);
+	if (ret)
+		return ret;
+
+	imx->master.num_chipselect = num_cs;
+	imx->cs_array = xzalloc(sizeof(u32) * num_cs);
+
+	for (i = 0; i < num_cs; i++) {
+		int cs_gpio = of_get_named_gpio(node, "cs-gpios", i);
+		imx->cs_array[i] = cs_gpio;
+	}
+
+	spi_of_register_slaves(&imx->master, node);
+
+	return 0;
+}
+
 static int imx_spi_probe(struct device_d *dev)
 {
 	struct spi_master *master;
 	struct imx_spi *imx;
 	struct spi_imx_master *pdata = dev->platform_data;
 	enum imx_spi_devtype version;
+	int ret;
 
 	imx = xzalloc(sizeof(*imx));
 
@@ -509,8 +536,20 @@ static int imx_spi_probe(struct device_d *dev)
 
 	master->setup = imx_spi_setup;
 	master->transfer = imx_spi_transfer;
-	master->num_chipselect = pdata->num_chipselect;
-	imx->cs_array = pdata->chipselect;
+
+	if (pdata) {
+		master->num_chipselect = pdata->num_chipselect;
+		imx->cs_array = pdata->chipselect;
+	} else {
+		if (IS_ENABLED(CONFIG_OFDEVICE))
+			imx_spi_dt_probe(imx);
+	}
+
+	imx->clk = clk_get(dev, NULL);
+	if (IS_ERR(imx->clk)) {
+		ret = PTR_ERR(imx->clk);
+		goto err_free;
+	}
 
 #ifdef CONFIG_DRIVER_SPI_IMX_0_0
 	if (cpu_is_mx27())
@@ -534,16 +573,34 @@ static int imx_spi_probe(struct device_d *dev)
 	spi_register_master(master);
 
 	return 0;
+
+err_free:
+	free(imx);
+
+	return ret;
 }
+
+static __maybe_unused struct of_device_id imx_spi_dt_ids[] = {
+	{
+		.compatible = "fsl,imx27-cspi",
+	}, {
+		.compatible = "fsl,imx35-cspi",
+	}, {
+		.compatible = "fsl,imx51-ecspi",
+	}, {
+		/* sentinel */
+	}
+};
 
 static struct driver_d imx_spi_driver = {
 	.name  = "imx_spi",
 	.probe = imx_spi_probe,
+	.of_compatible = DRV_OF_COMPAT(imx_spi_dt_ids),
 };
 
 static int imx_spi_init(void)
 {
-	register_driver(&imx_spi_driver);
+	platform_driver_register(&imx_spi_driver);
 	return 0;
 }
 

@@ -14,10 +14,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation.
  */
 #include <common.h>
 #include <filetype.h>
@@ -26,6 +22,7 @@
 #include <fcntl.h>
 #include <fs.h>
 #include <malloc.h>
+#include <errno.h>
 
 static const char *filetype_str[] = {
 	[filetype_unknown] = "unknown",
@@ -42,6 +39,9 @@ static const char *filetype_str[] = {
 	[filetype_sh] = "Bourne Shell",
 	[filetype_mips_barebox] = "MIPS barebox image",
 	[filetype_fat] = "FAT filesytem",
+	[filetype_mbr] = "MBR sector",
+	[filetype_bmp] = "BMP image",
+	[filetype_png] = "PNG image",
 };
 
 const char *file_type_to_string(enum filetype f)
@@ -52,30 +52,56 @@ const char *file_type_to_string(enum filetype f)
 	return NULL;
 }
 
-static int is_fat(u8 *buf)
+#define MBR_StartSector		8	/* MBR: Offset of Starting Sector in Partition Table Entry */
+#define BS_55AA			510	/* Boot sector signature (2) */
+#define MBR_Table		446	/* MBR: Partition table offset (2) */
+#define BS_FilSysType32		82	/* File system type (1) */
+#define BS_FilSysType		54	/* File system type (1) */
+
+enum filetype is_fat_or_mbr(const unsigned char *sector, unsigned long *bootsec)
 {
-	if (get_unaligned_le16(&buf[510]) != 0xAA55)
-		return 0;
+	/*
+	 * bootsec can be used to return index of the first sector in the
+	 * first partition
+	 */
+	if (bootsec)
+		*bootsec = 0;
 
-	/* FAT */
-	if ((get_unaligned_le32(&buf[54]) & 0xFFFFFF) == 0x544146)
-		return 1;
+	/*
+	 * Check record signature (always placed at offset 510 even if the
+	 * sector size is > 512)
+	 */
+	if (get_unaligned_le16(&sector[BS_55AA]) != 0xAA55)
+		return filetype_unknown;
 
-	/* FAT32 */
-	if ((get_unaligned_le32(&buf[82]) & 0xFFFFFF) == 0x544146)
-		return 1;
+	/* Check "FAT" string */
+	if ((get_unaligned_le32(&sector[BS_FilSysType]) & 0xFFFFFF) == 0x544146)
+		return filetype_fat;
 
-	return 0;
+	if ((get_unaligned_le32(&sector[BS_FilSysType32]) & 0xFFFFFF) == 0x544146)
+		return filetype_fat;
+
+	if (bootsec)
+		/*
+		 * This must be an MBR, so return the starting sector of the
+		 * first partition so we could check if there is a FAT boot
+		 * sector there
+		 */
+		*bootsec = get_unaligned_le16(&sector[MBR_Table + MBR_StartSector]);
+
+	return filetype_mbr;
 }
 
 enum filetype file_detect_type(void *_buf)
 {
 	u32 *buf = _buf;
+	u64 *buf64 = _buf;
 	u8 *buf8 = _buf;
+	enum filetype type;
 
 	if (strncmp(buf8, "#!/bin/sh", 9) == 0)
 		return filetype_sh;
-	if (buf[8] == 0x65726162 && buf[9] == 0x00786f62)
+	if (is_barebox_arm_head(_buf))
 		return filetype_arm_barebox;
 	if (buf[9] == 0x016f2818 || buf[9] == 0x18286f01)
 		return filetype_arm_zimage;
@@ -99,8 +125,13 @@ enum filetype file_detect_type(void *_buf)
 		return filetype_aimage;
 	if (strncmp(buf8 + 0x10, "barebox", 7) == 0)
 		return filetype_mips_barebox;
-	if (is_fat(buf8))
-		return filetype_fat;
+	type = is_fat_or_mbr(buf8, NULL);
+	if (type != filetype_unknown)
+		return type;
+	if (strncmp(buf8, "BM", 2) == 0)
+		return filetype_bmp;
+	if (buf64[0] == le64_to_cpu(0x0a1a0a0d474e5089ull))
+		return filetype_png;
 
 	return filetype_unknown;
 }
@@ -110,6 +141,7 @@ enum filetype file_name_detect_type(const char *filename)
 	int fd, ret;
 	void *buf;
 	enum filetype type = filetype_unknown;
+	unsigned long bootsec;
 
 	fd = open(filename, O_RDONLY);
 	if (fd < 0)
@@ -122,6 +154,21 @@ enum filetype file_name_detect_type(const char *filename)
 		goto err_out;
 
 	type = file_detect_type(buf);
+
+	if (type == filetype_mbr) {
+		/*
+		 * Get the first partition start sector
+		 * and check for FAT in it
+		 */
+		is_fat_or_mbr(buf, &bootsec);
+		ret = lseek(fd, (bootsec) * 512, SEEK_SET);
+		if (ret < 0)
+			goto err_out;
+		ret = read(fd, buf, 512);
+		if (ret < 0)
+			goto err_out;
+		type = is_fat_or_mbr((u8 *)buf, NULL);
+	}
 
 err_out:
 	close(fd);

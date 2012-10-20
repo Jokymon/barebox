@@ -12,10 +12,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <common.h>
@@ -23,11 +19,13 @@
 #include <net.h>
 #include <init.h>
 #include <driver.h>
-#include <miidev.h>
 #include <fec.h>
 #include <io.h>
 #include <clock.h>
 #include <xfuncs.h>
+#include <linux/phy.h>
+#include <linux/clk.h>
+#include <linux/err.h>
 
 #include <asm/mmu.h>
 
@@ -47,19 +45,31 @@ struct fec_frame {
 	uint8_t head[16];	/* MAC header(6 + 6 + 2) + 2(aligned) */
 };
 
+#ifdef CONFIG_COMMON_CLK
+static inline unsigned long fec_clk_get_rate(struct fec_priv *fec)
+{
+	return clk_get_rate(fec->clk);
+}
+#else
+static inline unsigned long fec_clk_get_rate(struct fec_priv *fec)
+{
+	return imx_get_fecclk();
+}
+#endif
+
+
 /*
  * MII-interface related functions
  */
-static int fec_miidev_read(struct mii_device *mdev, int phyAddr, int regAddr)
+static int fec_miibus_read(struct mii_bus *bus, int phyAddr, int regAddr)
 {
-	struct eth_device *edev = mdev->edev;
-	struct fec_priv *fec = (struct fec_priv *)edev->priv;
+	struct fec_priv *fec = (struct fec_priv *)bus->priv;
 
 	uint32_t reg;		/* convenient holder for the PHY register */
 	uint32_t phy;		/* convenient holder for the PHY */
 	uint64_t start;
 
-	writel(((imx_get_fecclk() >> 20) / 5) << 1,
+	writel(((fec_clk_get_rate(fec) >> 20) / 5) << 1,
 			fec->regs + FEC_MII_SPEED);
 	/*
 	 * reading from any PHY's register is done by properly
@@ -93,17 +103,16 @@ static int fec_miidev_read(struct mii_device *mdev, int phyAddr, int regAddr)
 	return readl(fec->regs + FEC_MII_DATA);
 }
 
-static int fec_miidev_write(struct mii_device *mdev, int phyAddr,
-	int regAddr, int data)
+static int fec_miibus_write(struct mii_bus *bus, int phyAddr,
+	int regAddr, u16 data)
 {
-	struct eth_device *edev = mdev->edev;
-	struct fec_priv *fec = (struct fec_priv *)edev->priv;
+	struct fec_priv *fec = (struct fec_priv *)bus->priv;
 
 	uint32_t reg;		/* convenient holder for the PHY register */
 	uint32_t phy;		/* convenient holder for the PHY */
 	uint64_t start;
 
-	writel(((imx_get_fecclk() >> 20) / 5) << 1,
+	writel(((fec_clk_get_rate(fec) >> 20) / 5) << 1,
 			fec->regs + FEC_MII_SPEED);
 
 	reg = regAddr << FEC_MII_DATA_RA_SHIFT;
@@ -296,7 +305,7 @@ static int fec_init(struct eth_device *dev)
 		 * Set MII_SPEED = (1/(mii_speed * 2)) * System Clock
 		 * and do not drop the Preamble.
 		 */
-		writel(((imx_get_fecclk() >> 20) / 5) << 1,
+		writel(((fec_clk_get_rate(fec) >> 20) / 5) << 1,
 				fec->regs + FEC_MII_SPEED);
 	}
 
@@ -347,10 +356,18 @@ static int fec_init(struct eth_device *dev)
 	/* size of each buffer */
 	writel(FEC_MAX_PKT_SIZE, fec->regs + FEC_EMRBR);
 
-	if (fec->xcv_type != SEVENWIRE)
-		miidev_restart_aneg(&fec->miidev);
-
 	return 0;
+}
+
+static void fec_update_linkspeed(struct eth_device *edev)
+{
+	struct fec_priv *fec = (struct fec_priv *)edev->priv;
+
+	if (edev->phydev->speed == SPEED_10) {
+		u32 rcntl = readl(fec->regs + FEC_R_CNTRL);
+		rcntl |= FEC_R_CNTRL_RMII_10T;
+		writel(rcntl, fec->regs + FEC_R_CNTRL);
+	}
 }
 
 /**
@@ -362,6 +379,17 @@ static int fec_open(struct eth_device *edev)
 	struct fec_priv *fec = (struct fec_priv *)edev->priv;
 	int ret;
 	u32 ecr;
+
+	if (fec->xcv_type != SEVENWIRE) {
+		ret = phy_device_connect(edev, &fec->miibus, fec->phy_addr,
+					 fec_update_linkspeed, fec->phy_flags,
+					 fec->interface);
+		if (ret)
+			return ret;
+
+		if (fec->phy_init)
+			fec->phy_init(edev->phydev);
+	}
 
 	/*
 	 * Initialize RxBD/TxBD rings
@@ -387,24 +415,6 @@ static int fec_open(struct eth_device *edev)
 	 * Enable SmartDMA receive task
 	 */
 	fec_rx_task_enable(fec);
-
-	if (fec->xcv_type != SEVENWIRE) {
-		ret = miidev_wait_aneg(&fec->miidev);
-		if (ret)
-			return ret;
-
-		ret = miidev_get_status(&fec->miidev);
-		if (ret < 0)
-			return ret;
-
-		if (ret & MIIDEV_STATUS_IS_10MBIT) {
-			u32 rcntl = readl(fec->regs + FEC_R_CNTRL);
-			rcntl |= FEC_R_CNTRL_RMII_10T;
-			writel(rcntl, fec->regs + FEC_R_CNTRL);
-		}
-
-		miidev_print_status(&fec->miidev);
-	}
 
 	return 0;
 }
@@ -617,6 +627,7 @@ static int fec_probe(struct device_d *dev)
         struct eth_device *edev;
 	struct fec_priv *fec;
 	void *base;
+	int ret;
 #ifdef CONFIG_ARCH_IMX27
 	PCCR0 |= PCCR0_FEC_EN;
 #endif
@@ -632,6 +643,14 @@ static int fec_probe(struct device_d *dev)
 	edev->get_ethaddr = fec_get_hwaddr;
 	edev->set_ethaddr = fec_set_hwaddr;
 	edev->parent = dev;
+
+	if (IS_ENABLED(CONFIG_COMMON_CLK)) {
+		fec->clk = clk_get(dev, NULL);
+		if (IS_ERR(fec->clk)) {
+			ret = PTR_ERR(fec->clk);
+			goto err_free;
+		}
+	}
 
 	fec->regs = dev_request_mem_region(dev, 0);
 
@@ -659,18 +678,38 @@ static int fec_probe(struct device_d *dev)
 	fec->xcv_type = pdata->xcv_type;
 
 	if (fec->xcv_type != SEVENWIRE) {
-		fec->miidev.read = fec_miidev_read;
-		fec->miidev.write = fec_miidev_write;
-		fec->miidev.address = pdata->phy_addr;
-		fec->miidev.flags = pdata->xcv_type == MII10 ? MIIDEV_FORCE_10 : 0;
-		fec->miidev.edev = edev;
-		fec->miidev.parent = dev;
+		fec->phy_init = pdata->phy_init;
+		fec->miibus.read = fec_miibus_read;
+		fec->miibus.write = fec_miibus_write;
+		fec->phy_addr = pdata->phy_addr;
+		switch (pdata->xcv_type) {
+		case RMII:
+			fec->interface = PHY_INTERFACE_MODE_RMII;
+			break;
+		case RGMII:
+			fec->interface = PHY_INTERFACE_MODE_RGMII;
+			break;
+		case MII10:
+			fec->phy_flags = PHYLIB_FORCE_10;
+		case MII100:
+			fec->interface = PHY_INTERFACE_MODE_MII;
+			break;
+		case SEVENWIRE:
+			fec->interface = PHY_INTERFACE_MODE_NA;
+			break;
+		}
+		fec->miibus.priv = fec;
+		fec->miibus.parent = dev;
 
-		mii_register(&fec->miidev);
+		mdiobus_register(&fec->miibus);
 	}
 
 	eth_register(edev);
 	return 0;
+
+err_free:
+	free(fec);
+	return ret;
 }
 
 static void fec_remove(struct device_d *dev)
@@ -691,8 +730,8 @@ static struct driver_d fec_driver = {
 
 static int fec_register(void)
 {
-        register_driver(&fec_driver);
-        return 0;
+	platform_driver_register(&fec_driver);
+	return 0;
 }
 
 device_initcall(fec_register);

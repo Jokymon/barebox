@@ -19,10 +19,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 #include <config.h>
 #include <common.h>
@@ -32,8 +28,9 @@
 #include <mci.h>
 #include <clock.h>
 #include <io.h>
+#include <linux/clk.h>
+#include <linux/err.h>
 #include <asm/mmu.h>
-#include <mach/clock.h>
 #include <mach/generic.h>
 #include <mach/esdhc.h>
 #include <gpio.h>
@@ -74,6 +71,7 @@ struct fsl_esdhc_host {
 	u32			no_snoop;
 	unsigned long		cur_clock;
 	struct device_d		*dev;
+	struct clk		*clk;
 };
 
 #define to_fsl_esdhc(mci)	container_of(mci, struct fsl_esdhc_host, mci)
@@ -335,7 +333,7 @@ esdhc_send_cmd(struct mci_host *mci, struct mci_cmd *cmd, struct mci_data *data)
 	esdhc_write32(&regs->irqstat, -1);
 
 	/* Wait for the bus to be idle */
-	ret = wait_on_timeout(100 * MSECOND,
+	ret = wait_on_timeout(SECOND,
 			!(esdhc_read32(&regs->prsstat) &
 				(PRSSTAT_CICHB | PRSSTAT_CIDHB)));
 	if (ret) {
@@ -358,7 +356,7 @@ static void set_sysctl(struct mci_host *mci, u32 clock)
 	int div, pre_div;
 	struct fsl_esdhc_host *host = to_fsl_esdhc(mci);
 	struct fsl_esdhc __iomem *regs = host->regs;
-	int sdhc_clk = imx_get_mmcclk();
+	int sdhc_clk = clk_get_rate(host->clk);
 	u32 clk;
 
 	if (clock < mci->f_min)
@@ -520,10 +518,15 @@ static int fsl_esdhc_probe(struct device_d *dev)
 	struct mci_host *mci;
 	u32 caps;
 	int ret;
+	unsigned long rate;
 	struct esdhc_platform_data *pdata = dev->platform_data;
 
 	host = xzalloc(sizeof(*host));
 	mci = &host->mci;
+
+	host->clk = clk_get(dev, NULL);
+	if (IS_ERR(host->clk))
+		return PTR_ERR(host->clk);
 
 	host->dev = dev;
 	host->regs = dev_request_mem_region(dev, 0);
@@ -557,26 +560,39 @@ static int fsl_esdhc_probe(struct device_d *dev)
 	host->mci.init = esdhc_init;
 	host->mci.hw_dev = dev;
 
-	host->mci.f_min = imx_get_mmcclk() >> 12;
+	rate = clk_get_rate(host->clk);
+	host->mci.f_min = rate >> 12;
 	if (host->mci.f_min < 200000)
 		host->mci.f_min = 200000;
-	host->mci.f_max = imx_get_mmcclk();
+	host->mci.f_max = rate;
 
 	mci_register(&host->mci);
 
 	return 0;
 }
 
+static __maybe_unused struct of_device_id fsl_esdhc_compatible[] = {
+	{
+		.compatible = "fsl,imx51-esdhc",
+	}, {
+		.compatible = "fsl,imx53-esdhc",
+	}, {
+		.compatible = "fsl,imx6q-usdhc",
+	}, {
+		/* sentinel */
+	}
+};
+
 static struct driver_d fsl_esdhc_driver = {
-        .name  = "imx-esdhc",
-        .probe = fsl_esdhc_probe,
+	.name  = "imx-esdhc",
+	.probe = fsl_esdhc_probe,
+	.of_compatible = DRV_OF_COMPAT(fsl_esdhc_compatible),
 };
 
 static int fsl_esdhc_init_driver(void)
 {
-        register_driver(&fsl_esdhc_driver);
-        return 0;
+	platform_driver_register(&fsl_esdhc_driver);
+	return 0;
 }
 
 device_initcall(fsl_esdhc_init_driver);
-

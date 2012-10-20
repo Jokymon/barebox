@@ -23,9 +23,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  */
 
@@ -181,7 +178,7 @@ static uint mmc_spi_readdata(struct mmc_spi_host *host, void *xbuf,
 			mmc_spi_readbytes(host, bsize, buf);
 			mmc_spi_readbytes(host, 2, &crc);
 #ifdef CONFIG_MMC_SPI_CRC_ON
-			if (swab16(cyg_crc16(buf, bsize)) != crc) {
+			if (be16_to_cpu(cyg_crc16(buf, bsize)) != crc) {
 				dev_dbg(host->dev, "%s: CRC error\n", __func__);
 				r1 = R1_SPI_COM_CRC;
 				break;
@@ -212,7 +209,7 @@ static uint mmc_spi_writedata(struct mmc_spi_host *host, const void *xbuf,
 
 	while (bcnt--) {
 #ifdef CONFIG_MMC_SPI_CRC_ON
-		crc = swab16(cyg_crc16((u8 *)buf, bsize));
+		crc = be16_to_cpu(cyg_crc16((u8 *)buf, bsize));
 #endif
 		mmc_spi_writebytes(host, 2, tok);
 		mmc_spi_writebytes(host, bsize, (void *)buf);
@@ -291,7 +288,7 @@ static int mmc_spi_request(struct mci_host *mci, struct mci_cmd *cmd, struct mci
 	} else if (cmd->resp_type == MMC_RSP_R2) {
 		r1 = mmc_spi_readdata(host, cmd->response, 1, 16);
 		for (i = 0; i < 4; i++)
-			cmd->response[i] = swab32(cmd->response[i]);
+			cmd->response[i] = be32_to_cpu(cmd->response[i]);
 		dev_dbg(host->dev, "MMC_RSP_R2 -> %x %x %x %x\n", cmd->response[0], cmd->response[1],
 		      cmd->response[2], cmd->response[3]);
 	} else if (!data) {
@@ -299,7 +296,7 @@ static int mmc_spi_request(struct mci_host *mci, struct mci_cmd *cmd, struct mci
 		case SD_CMD_SEND_IF_COND:
 		case MMC_CMD_SPI_READ_OCR:
 			mmc_spi_readbytes(host, 4, cmd->response);
-			cmd->response[0] = swab32(cmd->response[0]);
+			cmd->response[0] = be32_to_cpu(cmd->response[0]);
 			break;
 		}
 	} else {
@@ -423,7 +420,7 @@ static struct driver_d spi_mci_driver = {
 
 static int spi_mci_init_driver(void)
 {
-	register_driver(&spi_mci_driver);
+	spi_register_driver(&spi_mci_driver);
 	return 0;
 }
 

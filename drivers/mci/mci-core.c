@@ -21,10 +21,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 /* #define DEBUG */
@@ -1501,7 +1497,7 @@ static struct driver_d mci_driver = {
 static int mci_init(void)
 {
 	sector_buf = xmemalign(32, 512);
-	return register_driver(&mci_driver);
+	return platform_driver_register(&mci_driver);
 }
 
 device_initcall(mci_init);
@@ -1520,5 +1516,5 @@ int mci_register(struct mci_host *host)
 	mci_dev->platform_data = host;
 	dev_add_child(host->hw_dev, mci_dev);
 
-	return register_device(mci_dev);
+	return platform_device_register(mci_dev);
 }

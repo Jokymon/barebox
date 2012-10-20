@@ -11,23 +11,19 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <config.h>
 #include <asm-generic/memory_layout.h>
 #include <mach/imx-regs.h>
+#include <asm/barebox-arm-head.h>
 
 	.section ".text_bare_init","ax"
 
-.globl board_init_lowlevel
-board_init_lowlevel:
+.globl reset
+reset:
 
-/* Save lr, because it is overwritten by the calls to mem_delay. */
-	mov	r10, lr
+	common_reset r0
 
 /*
  * Initialize the AHB-Lite IP Interface (AIPI) module (to enable access to
@@ -79,7 +75,7 @@ board_init_lowlevel:
 	cmp	pc, #0xc8000000
 	bhi	1f
 
-	mov	pc, r10
+	b	board_init_lowlevel_return
 1:
 
 	/* Precharge */
@@ -124,8 +120,8 @@ board_init_lowlevel:
 #ifdef CONFIG_NAND_IMX_BOOT
 	ldr	sp, =STACK_BASE + STACK_SIZE - 12	/* Setup a temporary stack in SDRAM */
 
-	ldr	r0, =IMX_NFC_BASE		/* start of NFC SRAM        */
-	ldr	r2, =IMX_NFC_BASE + 0x800	/* end of NFC SRAM          */
+	ldr	r0, =MX21_NFC_BASE_ADDR		/* start of NFC SRAM        */
+	ldr	r2, =MX21_NFC_BASE_ADDR + 0x800	/* end of NFC SRAM          */
 
 	/* skip NAND boot if not running from NFC space */
 	cmp	pc, r0
@@ -149,7 +145,7 @@ copy_loop:
 #endif /* CONFIG_NAND_IMX_BOOT */
 
 ret:
-	mov	pc, r10
+	b	board_init_lowlevel_return
 
 /*
  *  spin for a while.  we need to wait at least 200 usecs.

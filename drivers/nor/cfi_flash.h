@@ -18,10 +18,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <driver.h>
@@ -75,9 +71,7 @@ struct flash_info {
 	ulong	addr_unlock2;		/* unlock address 2 for AMD flash roms	*/
 	struct cfi_cmd_set *cfi_cmd_set;
 	struct cdev cdev;
-#ifdef CONFIG_PARTITION_NEED_MTD
 	struct mtd_info mtd;
-#endif
 	int numeraseregions;
 	struct mtd_erase_region_info *eraseregions;
 	void *base;

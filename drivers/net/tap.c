@@ -15,9 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include <common.h>
@@ -79,7 +76,7 @@ int tap_probe(struct device_d *dev)
 	struct tap_priv *priv;
 	int ret = 0;
 
-	priv = xmalloc(sizeof(struct tap_priv));
+	priv = xzalloc(sizeof(struct tap_priv));
 	priv->name = "barebox";
 
 	priv->fd = tap_alloc(priv->name);
@@ -88,8 +85,9 @@ int tap_probe(struct device_d *dev)
 		goto out;
 	}
 
-	edev = xmalloc(sizeof(struct eth_device));
+	edev = xzalloc(sizeof(struct eth_device));
 	edev->priv = priv;
+	edev->parent = dev;
 
 	edev->init = tap_eth_open;
 	edev->open = tap_eth_open;
@@ -114,7 +112,7 @@ static struct driver_d tap_driver = {
 
 static int tap_init(void)
 {
-        register_driver(&tap_driver);
+        platform_driver_register(&tap_driver);
         return 0;
 }
 

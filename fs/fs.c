@@ -15,9 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include <common.h>
@@ -1141,6 +1138,12 @@ struct bus_type fs_bus = {
 	.remove = fs_remove,
 };
 
+static int fs_bus_init(void)
+{
+	return bus_register(&fs_bus);
+}
+pure_initcall(fs_bus_init);
+
 int register_fs_driver(struct fs_driver_d *fsdrv)
 {
 	fsdrv->drv.bus = &fs_bus;
@@ -1525,7 +1528,9 @@ ssize_t mem_read(struct cdev *cdev, void *buf, size_t count, loff_t offset, ulon
 		return -1;
 	dev = cdev->dev;
 
-	size = min((loff_t)count, resource_size(&dev->resource[0]) - offset);
+	size = min((resource_size_t)count,
+			resource_size(&dev->resource[0]) -
+			(resource_size_t)offset);
 	memcpy_sz(buf, dev_get_mem_region(dev, 0) + offset, size, flags & O_RWSIZE_MASK);
 	return size;
 }
@@ -1540,7 +1545,9 @@ ssize_t mem_write(struct cdev *cdev, const void *buf, size_t count, loff_t offse
 		return -1;
 	dev = cdev->dev;
 
-	size = min((loff_t)count, resource_size(&dev->resource[0]) - offset);
+	size = min((resource_size_t)count,
+			resource_size(&dev->resource[0]) -
+			(resource_size_t)offset);
 	memcpy_sz(dev_get_mem_region(dev, 0) + offset, buf, size, flags & O_RWSIZE_MASK);
 	return size;
 }

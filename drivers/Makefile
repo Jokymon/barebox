@@ -1,4 +1,5 @@
 obj-y	+= base/
+obj-$(CONFIG_ARM_AMBA) += amba/
 obj-y	+= net/
 obj-y	+= serial/
 obj-y	+= mtd/
@@ -19,3 +20,4 @@ obj-y	+= misc/
 obj-y	+= dma/
 obj-y  += watchdog/
 obj-y	+= gpio/
+obj-$(CONFIG_OFDEVICE) += of/

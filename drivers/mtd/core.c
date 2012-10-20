@@ -79,7 +79,7 @@ static ssize_t mtd_write(struct cdev* cdev, const void *buf, size_t _count,
 		return -EINVAL;
 	}
 
-	dev_dbg(cdev->dev, "write: 0x%08lx 0x%08lx\n", offset, count);
+	dev_dbg(cdev->dev, "write: offset: 0x%08lx count: 0x%zx\n", offset, count);
 	while (count) {
 		now = count > mtd->writesize ? mtd->writesize : count;
 
@@ -100,7 +100,7 @@ static ssize_t mtd_write(struct cdev* cdev, const void *buf, size_t _count,
 				ret = mtd->write(mtd, offset, now, &retlen,
 						  buf);
 			dev_dbg(cdev->dev,
-				"offset: 0x%08lx now: 0x%08lx retlen: 0x%08lx\n",
+				"offset: 0x%08lx now: 0x%zx retlen: 0x%zx\n",
 				offset, now, retlen);
 		}
 		if (ret)
@@ -143,6 +143,7 @@ int mtd_ioctl(struct cdev *cdev, int request, void *buf)
 		user->flags	= mtd->flags;
 		user->size	= mtd->size;
 		user->erasesize	= mtd->erasesize;
+		user->writesize	= mtd->writesize;
 		user->oobsize	= mtd->oobsize;
 		user->mtd	= mtd;
 		/* The below fields are obsolete */
@@ -224,7 +225,7 @@ int add_mtd_device(struct mtd_info *mtd, char *devname)
 		devname = "mtd";
 	strcpy(mtd->class_dev.name, devname);
 	mtd->class_dev.id = DEVICE_ID_DYNAMIC;
-	register_device(&mtd->class_dev);
+	platform_device_register(&mtd->class_dev);
 
 	mtd->cdev.ops = &mtd_ops;
 	mtd->cdev.size = mtd->size;

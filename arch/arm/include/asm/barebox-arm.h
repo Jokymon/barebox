@@ -20,10 +20,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #ifndef _BAREBOX_ARM_H_
@@ -37,10 +33,9 @@ int	board_init(void);
 int	dram_init (void);
 
 extern char __exceptions_start[], __exceptions_stop[];
-extern char __ll_return[];
 
 void board_init_lowlevel(void);
 void board_init_lowlevel_return(void);
-void arch_init_lowlevel(void);
+uint32_t get_runtime_offset(void);
 
 #endif	/* _BAREBOX_ARM_H_ */

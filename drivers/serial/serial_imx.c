@@ -11,20 +11,18 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
  */
 
 #include <common.h>
 #include <mach/imx-regs.h>
-#include <mach/clock.h>
 #include <driver.h>
 #include <init.h>
 #include <malloc.h>
 #include <notifier.h>
 #include <io.h>
+#include <linux/err.h>
+#include <linux/clk.h>
 
 #define URXD0	0x0	/* Receiver Register */
 #define URTX0	0x40	/* Transmitter Register */
@@ -173,16 +171,17 @@ struct imx_serial_priv {
 	int baudrate;
 	struct notifier_block notify;
 	void __iomem *regs;
+	struct clk *clk;
 };
 
-static int imx_serial_reffreq(void __iomem *regs)
+static int imx_serial_reffreq(struct imx_serial_priv *priv)
 {
 	ulong rfdiv;
 
-	rfdiv = (readl(regs + UFCR) >> 7) & 7;
+	rfdiv = (readl(priv->regs + UFCR) >> 7) & 7;
 	rfdiv = rfdiv < 6 ? 6 - rfdiv : 7;
 
-	return imx_get_uartclk() / rfdiv;
+	return clk_get_rate(priv->clk) / rfdiv;
 }
 
 /*
@@ -212,7 +211,7 @@ static int imx_serial_init_port(struct console_device *cdev)
 	writel(0xa81, regs + UFCR);
 
 #ifdef ONEMS
-	writel(imx_serial_reffreq(regs) / 1000, regs + ONEMS);
+	writel(imx_serial_reffreq(priv) / 1000, regs + ONEMS);
 #endif
 
 	/* Enable FIFOs */
@@ -294,7 +293,7 @@ static int imx_serial_setbaudrate(struct console_device *cdev, int baudrate)
 	/* Set the numerator value minus one of the BRM ratio */
 	writel((baudrate / 100) - 1, regs + UBIR);
 	/* Set the denominator value minus one of the BRM ratio    */
-	writel((imx_serial_reffreq(regs) / 1600) - 1, regs + UBMR);
+	writel((imx_serial_reffreq(priv) / 1600) - 1, regs + UBMR);
 
 	writel(ucr1, regs + UCR1);
 
@@ -319,10 +318,17 @@ static int imx_serial_probe(struct device_d *dev)
 	struct console_device *cdev;
 	struct imx_serial_priv *priv;
 	uint32_t val;
+	int ret;
 
 	priv = xzalloc(sizeof(*priv));
 	cdev = &priv->cdev;
 	dev->priv = priv;
+
+	priv->clk = clk_get(dev, NULL);
+	if (IS_ERR(priv->clk)) {
+		ret = PTR_ERR(priv->clk);
+		goto err_free;
+	}
 
 	priv->regs = dev_request_mem_region(dev, 0);
 	cdev->dev = dev;
@@ -346,6 +352,11 @@ static int imx_serial_probe(struct device_d *dev)
 	clock_register_client(&priv->notify);
 
 	return 0;
+
+err_free:
+	free(priv);
+
+	return ret;
 }
 
 static void imx_serial_remove(struct device_d *dev)
@@ -357,15 +368,28 @@ static void imx_serial_remove(struct device_d *dev)
 	free(priv);
 }
 
+static __maybe_unused struct of_device_id imx_serial_dt_ids[] = {
+	{
+		.compatible = "fsl,imx1-uart",
+		.data = 0,
+	}, {
+		.compatible = "fsl,imx21-uart",
+		.data = 1,
+	}, {
+		/* sentinel */
+	}
+};
+
 static struct driver_d imx_serial_driver = {
-        .name   = "imx_serial",
-        .probe  = imx_serial_probe,
+	.name   = "imx_serial",
+	.probe  = imx_serial_probe,
 	.remove = imx_serial_remove,
+	.of_compatible = DRV_OF_COMPAT(imx_serial_dt_ids),
 };
 
 static int imx_serial_init(void)
 {
-	register_driver(&imx_serial_driver);
+	platform_driver_register(&imx_serial_driver);
 	return 0;
 }
 

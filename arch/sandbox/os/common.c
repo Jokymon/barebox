@@ -16,9 +16,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 /**
@@ -51,6 +48,9 @@
  */
 #include <mach/linux.h>
 #include <mach/hostfile.h>
+
+int sdl_xres;
+int sdl_yres;
 
 static struct termios term_orig, term_vi;
 static char erase_char;	/* the users erase character */
@@ -278,10 +278,12 @@ static struct option long_options[] = {
 	{"env",    1, 0, 'e'},
 	{"stdout", 1, 0, 'O'},
 	{"stdin",  1, 0, 'I'},
+	{"xres",  1, 0, 'x'},
+	{"yres",  1, 0, 'y'},
 	{0, 0, 0, 0},
 };
 
-static const char optstring[] = "hm:i:e:O:I:";
+static const char optstring[] = "hm:i:e:O:I:x:y:";
 
 int main(int argc, char *argv[])
 {
@@ -306,12 +308,9 @@ int main(int argc, char *argv[])
 		case 'm':
 			malloc_size = strtoul(optarg, NULL, 0);
 			break;
+		case 'i':
+			break;
 		case 'e':
-			sprintf(str, "env%d", envno);
-			ret = add_image(optarg, str);
-			if (ret)
-				exit(1);
-			envno++;
 			break;
 		case 'O':
 			fd = open(optarg, O_WRONLY);
@@ -331,6 +330,12 @@ int main(int argc, char *argv[])
 
 			barebox_register_console("cin", fd, -1);
 			break;
+		case 'x':
+			sdl_xres = strtoul(optarg, NULL, 0);
+			break;
+		case 'y':
+			sdl_yres = strtoul(optarg, NULL, 0);
+			break;
 		default:
 			exit(1);
 		}
@@ -343,7 +348,11 @@ int main(int argc, char *argv[])
 	}
 	mem_malloc_init(ram, ram + malloc_size - 1);
 
-	/* reset getopt */
+	/*
+	 * Reset getopt.
+	 * We need to run a second getopt to count -i parameters.
+	 * This is for /dev/fd# devices.
+	 */
 	optind = 1;
 
 	while (1) {
@@ -355,10 +364,6 @@ int main(int argc, char *argv[])
 			break;
 
 		switch (opt) {
-		case 'h':
-			break;
-		case 'm':
-			break;
 		case 'i':
 			sprintf(str, "fd%d", fdno);
 			ret = add_image(optarg, str);
@@ -367,13 +372,14 @@ int main(int argc, char *argv[])
 			fdno++;
 			break;
 		case 'e':
-			break;
-		case 'O':
-			break;
-		case 'I':
+			sprintf(str, "env%d", envno);
+			ret = add_image(optarg, str);
+			if (ret)
+				exit(1);
+			envno++;
 			break;
 		default:
-			exit(1);
+			break;
 		}
 	}
 
@@ -397,7 +403,7 @@ static void print_usage(const char *prgname)
 "Usage: %s [OPTIONS]\n"
 "Start barebox.\n\n"
 "Options:\n\n"
-"  -m, "
+"  -m, --malloc=<size>	Start sandbox with a specified malloc-space size in bytes.\n"
 "  -i, --image=<file>   Map an image file to barebox. This option can be given\n"
 "                       multiple times. The files will show up as\n"
 "                       /dev/fd0 ... /dev/fdx under barebox.\n"
@@ -409,7 +415,9 @@ static void print_usage(const char *prgname)
 "  -O, --stdout=<file>  Register a file as a console capable of doing stdout.\n"
 "                       <file> can be a regular file or a FIFO.\n"
 "  -I, --stdin=<file>   Register a file as a console capable of doing stdin.\n"
-"                       <file> can be a regular file or a FIFO.\n",
+"                       <file> can be a regular file or a FIFO.\n"
+"  -x, --xres=<res>     SDL width.\n"
+"  -y, --yres=<res>     SDL height.\n",
 	prgname
 	);
 }
@@ -427,6 +435,10 @@ static void print_usage(const char *prgname)
  * $ barebox [\<OPTIONS\>]
  *
  * Options can be:
+ *
+ * -m, --malloc=\<size\>
+ *
+ * Start sandbox with a specified malloc-space \<size\> in bytes.
  *
  * -i \<file\>
  *
@@ -448,6 +460,14 @@ static void print_usage(const char *prgname)
  *
  * Register \<file\> as a console capable of doing stdin. \<file\> can be a regular
  * file or a fifo.
+ *
+ * -x, --xres \<res\>
+ *
+ * Specify SDL width
+ *
+ * -y, --yres \<res\>
+ *
+ * Specify SDL height
  *
  * @section simu_dbg How to debug barebox simulator
  *

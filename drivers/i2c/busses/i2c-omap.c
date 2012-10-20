@@ -22,10 +22,6 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 
@@ -868,7 +864,7 @@ static struct driver_d omap_i2c_driver = {
 /* I2C may be needed to bring up other drivers */
 static int __init omap_i2c_init_driver(void)
 {
-	return register_driver(&omap_i2c_driver);
+	return platform_driver_register(&omap_i2c_driver);
 }
 device_initcall(omap_i2c_init_driver);
 

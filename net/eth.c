@@ -15,10 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <common.h>
@@ -27,11 +23,12 @@
 #include <driver.h>
 #include <init.h>
 #include <net.h>
-#include <miidev.h>
+#include <linux/phy.h>
 #include <errno.h>
 #include <malloc.h>
 
 static struct eth_device *eth_current;
+static uint64_t last_link_check;
 
 static LIST_HEAD(netdev_list);
 
@@ -128,19 +125,63 @@ int eth_complete(struct string_list *sl, char *instr)
 }
 #endif
 
-int eth_send(void *packet, int length)
+/*
+ * Check for link if we haven't done so for longer.
+ */
+static int eth_carrier_check(int force)
+{
+	int ret;
+
+	if (!IS_ENABLED(CONFIG_PHYLIB))
+		return 0;
+
+	if (!eth_current->phydev)
+		return 0;
+
+	if (force || is_timeout(last_link_check, 5 * SECOND)) {
+		ret = phy_update_status(eth_current->phydev);
+		if (ret)
+			return ret;
+		last_link_check = get_time_ns();
+	}
+
+	return eth_current->phydev->link ? 0 : -ENETDOWN;
+}
+
+/*
+ * Check if we have a current ethernet device and
+ * eventually open it if we have to.
+ */
+static int eth_check_open(void)
 {
 	int ret;
 
 	if (!eth_current)
 		return -ENODEV;
 
-	if (!eth_current->active) {
-		ret = eth_current->open(eth_current);
-		if (ret)
-			return ret;
-		eth_current->active = 1;
-	}
+	if (eth_current->active)
+		return 0;
+
+	ret = eth_current->open(eth_current);
+	if (ret)
+		return ret;
+
+	eth_current->active = 1;
+
+	return eth_carrier_check(1);
+}
+
+int eth_send(void *packet, int length)
+{
+	int ret;
+
+	ret = eth_check_open();
+	if (ret)
+		return ret;
+
+	ret = eth_carrier_check(0);
+	if (ret)
+		return ret;
 
 	led_trigger_network(LED_TRIGGER_NET_TX);
 
@@ -151,15 +192,13 @@ int eth_rx(void)
 {
 	int ret;
 
-	if (!eth_current)
-		return -ENODEV;
+	ret = eth_check_open();
+	if (ret)
+		return ret;
 
-	if (!eth_current->active) {
-		ret = eth_current->open(eth_current);
-		if (ret)
-			return ret;
-		eth_current->active = 1;
-	}
+	ret = eth_carrier_check(0);
+	if (ret)
+		return ret;
 
 	return eth_current->recv(eth_current);
 }
@@ -222,7 +261,7 @@ int eth_register(struct eth_device *edev)
 	if (edev->parent)
 		dev_add_child(edev->parent, &edev->dev);
 
-	register_device(&edev->dev);
+	platform_device_register(&edev->dev);
 
 	dev_add_param(dev, "ipaddr", eth_set_ipaddr, NULL, 0);
 	dev_add_param(dev, "ethaddr", eth_set_ethaddr, NULL, 0);

@@ -15,9 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include <common.h>
@@ -26,15 +23,36 @@
 #include <mach/linux.h>
 #include <init.h>
 #include <errno.h>
+#include <fb.h>
+
+struct fb_videomode mode = {
+	.name = "sdl",	/* optional */
+	.xres = 640,
+	.yres = 480,
+};
 
 static struct device_d tap_device = {
 	.id	  = DEVICE_ID_DYNAMIC,
 	.name     = "tap",
 };
 
+static struct device_d sdl_device = {
+	.id	  = DEVICE_ID_DYNAMIC,
+	.name     = "sdlfb",
+	.platform_data = &mode,
+};
+
 static int devices_init(void)
 {
-	register_device(&tap_device);
+	platform_device_register(&tap_device);
+
+	if (sdl_xres)
+		mode.xres = sdl_xres;
+
+	if (sdl_yres)
+		mode.yres = sdl_yres;
+
+	platform_device_register(&sdl_device);
 
 	return 0;
 }

@@ -10,21 +10,10 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
- * MA 02110-1301, USA.
  */
 
 #ifndef __ASM_ARCH_MX23_REGS_H
 #define __ASM_ARCH_MX23_REGS_H
-
-/*
- * sanity check
- */
-#ifndef _IMX_REGS_H
-# error "Please do not include directly. Use imx-regs.h instead."
-#endif
 
 #define IMX_MEMORY_BASE		0x40000000
 #define MXS_APBH_BASE		0x80004000

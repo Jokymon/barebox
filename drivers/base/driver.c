@@ -15,9 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 /**
@@ -85,8 +82,6 @@ static int match(struct driver_d *drv, struct device_d *dev)
 
 	dev->driver = drv;
 
-	if (dev->bus != drv->bus)
-		goto err_out;
 	if (dev->bus->match(dev, drv))
 		goto err_out;
 	if (dev->bus->probe(dev))
@@ -116,18 +111,18 @@ int register_device(struct device_d *new_device)
 
 	debug ("register_device: %s\n", dev_name(new_device));
 
-	if (!new_device->bus) {
-//		dev_err(new_device, "no bus type associated. Needs fixup\n");
-		new_device->bus = &platform_bus;
-	}
-
 	list_add_tail(&new_device->list, &device_list);
 	INIT_LIST_HEAD(&new_device->children);
 	INIT_LIST_HEAD(&new_device->cdevs);
 	INIT_LIST_HEAD(&new_device->parameters);
 	INIT_LIST_HEAD(&new_device->active);
 
-	for_each_driver(drv) {
+	if (!new_device->bus)
+		return 0;
+
+	list_add_tail(&new_device->bus_list, &new_device->bus->device_list);
+
+	bus_for_each_driver(new_device->bus, drv) {
 		if (!match(drv, new_device))
 			break;
 	}
@@ -159,6 +154,7 @@ int unregister_device(struct device_d *old_dev)
 	}
 
 	list_del(&old_dev->list);
+	list_del(&old_dev->bus_list);
 	list_del(&old_dev->active);
 
 	/* remove device from parents child list */
@@ -206,19 +202,17 @@ int register_driver(struct driver_d *drv)
 
 	debug("register_driver: %s\n", drv->name);
 
-	if (!drv->bus) {
-//		pr_err("driver %s has no bus type associated. Needs fixup\n", drv->name);
-		drv->bus = &platform_bus;
-	}
+	BUG_ON(!drv->bus);
 
 	list_add_tail(&drv->list, &driver_list);
+	list_add_tail(&drv->bus_list, &drv->bus->driver_list);
 
 	if (!drv->info)
 		drv->info = noinfo;
 	if (!drv->shortinfo)
 		drv->shortinfo = noshortinfo;
 
-	for_each_device(dev)
+	bus_for_each_device(drv->bus, dev)
 		match(drv, dev);
 
 	return 0;
@@ -313,6 +307,25 @@ const char *dev_id(const struct device_d *dev)
 	return buf;
 }
 
+int dev_printf(const struct device_d *dev, const char *format, ...)
+{
+	va_list args;
+	int ret = 0;
+
+	if (dev->driver && dev->driver->name)
+		ret += printf("%s ", dev->driver->name);
+
+	ret += printf("%s: ", dev_name(dev));
+
+	va_start(args, format);
+
+	ret += vprintf(format, args);
+
+	va_end(args);
+
+	return ret;
+}
+
 void devices_shutdown(void)
 {
 	struct device_d *dev;
@@ -321,6 +334,21 @@ void devices_shutdown(void)
 		if (dev->driver->remove)
 			dev->driver->remove(dev);
 	}
+}
+
+int dev_get_drvdata(struct device_d *dev, unsigned long *data)
+{
+	if (dev->of_id_entry) {
+		*data = dev->of_id_entry->data;
+		return 0;
+	}
+
+	if (dev->id_entry) {
+		*data = dev->id_entry->driver_data;
+		return 0;
+	}
+
+	return -ENODEV;
 }
 
 #ifdef CONFIG_CMD_DEVINFO
@@ -395,8 +423,11 @@ static int do_devinfo(int argc, char *argv[])
 			       res->start, resource_size(res));
 		}
 
-		printf("driver: %s\n\n", dev->driver ?
+		printf("driver: %s\n", dev->driver ?
 				dev->driver->name : "none");
+
+		printf("bus: %s\n\n", dev->bus ?
+				dev->bus->name : "none");
 
 		if (dev->driver)
 			dev->driver->info(dev);
@@ -406,6 +437,12 @@ static int do_devinfo(int argc, char *argv[])
 
 		list_for_each_entry(param, &dev->parameters, list)
 			printf("%16s = %s\n", param->name, dev_get_param(dev, param->name));
+#ifdef CONFIG_OFDEVICE
+		if (dev->device_node) {
+			printf("\ndevice node: %s\n", dev->device_node->full_name);
+			of_print_nodes(dev->device_node, 0);
+		}
+#endif
 	}
 
 	return 0;

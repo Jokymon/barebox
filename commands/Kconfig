@@ -192,14 +192,6 @@ config CMD_NAND
 	depends on NAND
 	prompt "nand"
 
-config CMD_NANDTEST
-	tristate
-	depends on NAND
-	depends on PARTITION
-	depends on NAND_ECC_HW || NAND_ECC_SOFT
-	select PARTITION_NEED_MTD
-	prompt "nandtest"
-
 config CMD_AUTOMOUNT
 	tristate
 	select FS_AUTOMOUNT
@@ -229,6 +221,14 @@ config CMD_READLINK
 	prompt "readlink"
 	help
 	  read value of a symbolic link
+
+config CMD_TFTP
+	depends on FS_TFTP
+	tristate
+	prompt "tftp"
+	help
+	  barebox can mount tftp as a filesystem. This command is only needed to
+	  preserve backward compatibility to the old tftp command.
 
 endmenu
 
@@ -326,15 +326,6 @@ config CMD_SHA224SUM
 	select CMD_DIGEST
 	select SHA224
 	prompt "sha224sum"
-
-config CMD_MTEST
-	tristate
-	prompt "mtest"
-
-config CMD_MTEST_ALTERNATIVE
-	bool
-	depends on CMD_MTEST
-	prompt "alternative mtest implementation"
 
 endmenu
 
@@ -468,7 +459,53 @@ config CMD_OFTREE
 	tristate
 	select OFTREE
 	prompt "oftree"
-	select FDT
+	help
+	  The oftree command has support for dumping devicetrees and, if
+	  enabled, to probe devices from the devicetree
+
+config CMD_OFTREE_PROBE
+	bool
+	depends on CMD_OFTREE
+	select OFDEVICE
+	prompt "oftree probe support"
+	help
+	  This enables the -p option to probe devices from the devicetree
+
+endmenu
+
+menu "testing                       "
+
+config CMD_NANDTEST
+	tristate
+	depends on NAND
+	depends on PARTITION
+	depends on NAND_ECC_HW || NAND_ECC_SOFT
+	select PARTITION_NEED_MTD
+	prompt "nandtest"
+
+config CMD_MTEST
+	tristate
+	prompt "mtest"
+
+config CMD_MTEST_ALTERNATIVE
+	bool
+	depends on CMD_MTEST
+	prompt "alternative mtest implementation"
+
+endmenu
+
+menu "video command                  "
+
+if VIDEO
+
+config CMD_SPLASH
+	bool
+	select IMAGE_RENDERER
+	prompt "splash"
+	help
+	  show bmp files on framebuffer devices
+
+endif
 
 endmenu
 
@@ -535,13 +572,6 @@ config CMD_LSMOD
 	depends on MODULES
 	prompt "lsmod"
 
-config CMD_BMP
-	bool
-	depends on VIDEO
-	prompt "bmp"
-	help
-	  show bmp files on framebuffer devices
-
 config CMD_GPIO
 	bool
 	depends on GENERIC_GPIO
@@ -589,6 +619,14 @@ config CMD_USB
 	default y
 	help
 	  The usb command allows to rescan for USB devices.
+
+config CMD_CLK
+	tristate
+	depends on COMMON_CLK
+	prompt "clock manipulation commands"
+	help
+	  Say yes here to get clk_set_rate, clk_set_parent and clk_dump
+	  commands to manipulate clocks on your system.
 
 menuconfig CMD_WD
 	bool

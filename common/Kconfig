@@ -96,6 +96,10 @@ config BANNER
 	bool "display banner"
 	default y
 
+config MEMINFO
+	bool "display memory info"
+	default y
+
 config ENVIRONMENT_VARIABLES
 	bool "environment variables support"
 
@@ -291,9 +295,6 @@ config MACH_DO_LOWLEVEL_INIT
 	  This entry enables SDRAM and other board low level initialization
 	  on many platforms. Disabling this option allows configurations to use
 	  barebox as a second stage boot loader.
-
-config ARCH_HAS_LOWLEVEL_INIT
-	bool
 
 config PROMPT
 	string
@@ -575,6 +576,7 @@ config DEFAULT_ENVIRONMENT_GENERIC
 	select CMD_CRC
 	select CMD_CRC_CMP
 	select CMD_AUTOMOUNT if HAVE_DEFAULT_ENVIRONMENT_NEW
+	select CMD_GLOBAL
 	prompt "Default environment generic"
 	help
 	  With this option barebox will use the generic default

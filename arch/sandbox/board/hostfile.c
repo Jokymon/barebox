@@ -15,9 +15,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
 #include <common.h>
@@ -95,14 +92,29 @@ static struct driver_d hf_drv = {
 
 static int hf_init(void)
 {
-	return register_driver(&hf_drv);
+	return platform_driver_register(&hf_drv);
 }
 
 device_initcall(hf_init);
 
 int barebox_register_filedev(struct hf_platform_data *hf)
 {
-	return !add_generic_device("hostfile", DEVICE_ID_DYNAMIC, NULL, hf->base, hf->size,
-			   IORESOURCE_MEM, hf);
+	struct device_d *dev;
+	struct resource *res;
+
+	dev = xzalloc(sizeof(*dev));
+	strcpy(dev->name, "hostfile");
+	dev->id = DEVICE_ID_DYNAMIC;
+	dev->platform_data = hf;
+
+	res = xzalloc(sizeof(struct resource));
+	res[0].start = hf->base;
+	res[0].end = hf->base + hf->size - 1;
+	res[0].flags = IORESOURCE_MEM;
+
+	dev->resource = res;
+	dev->num_resources = 1;
+
+	return sandbox_add_device(dev);
 }
 

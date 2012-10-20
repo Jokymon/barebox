@@ -11,10 +11,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  *
  */
 
@@ -118,7 +114,7 @@ static void tny_a9260_add_device_nand(void)
 #ifdef CONFIG_DRIVER_NET_MACB
 static struct at91_ether_platform_data macb_pdata = {
 	.flags		= AT91SAM_ETHER_RMII,
-	.phy_addr	= 0,
+	.phy_addr	= -1,
 };
 
 static void __init ek_add_device_macb(void)

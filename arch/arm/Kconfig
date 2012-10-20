@@ -40,6 +40,8 @@ config ARCH_IMX
 	bool "Freescale iMX-based"
 	select GENERIC_GPIO
 	select GPIOLIB
+	select COMMON_CLK
+	select CLKDEV_LOOKUP
 
 config ARCH_MXS
 	bool "Freescale i.MX23/28 (mxs) based"
@@ -58,6 +60,7 @@ config ARCH_NOMADIK
 config ARCH_OMAP
 	bool "TI OMAP"
 	select HAS_DEBUG_LL
+	select GPIOLIB
 
 config ARCH_PXA
 	bool "Intel/Marvell PXA based"
@@ -68,14 +71,12 @@ config ARCH_S3C24xx
 	select ARCH_SAMSUNG
 	select CPU_ARM920T
 	select GENERIC_GPIO
-#
-# Currently no board support
-#
-#config ARCH_S5PCxx
-#	bool "Samsung S5PC110, S5PV210"
-#	select ARCH_SAMSUNG
-#	select CPU_V7
-#	select GENERIC_GPIO
+
+config ARCH_S5PCxx
+	bool "Samsung S5PC110, S5PV210"
+	select ARCH_SAMSUNG
+	select CPU_V7
+	select GENERIC_GPIO
 
 config ARCH_S3C64xx
 	bool "Samsung S3C64xx"

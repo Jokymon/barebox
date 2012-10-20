@@ -125,17 +125,8 @@ int register_framebuffer(struct fb_info *info)
 
 	sprintf(dev->name, "fb");
 
+	info->dev.bus = &fb_bus;
 	register_device(&info->dev);
-	dev_add_param(dev, "enable", fb_enable_set, NULL, 0);
-	dev_set_param(dev, "enable", "0");
-
-	if (info->num_modes && (info->mode_list != NULL) &&
-			(info->fbops->fb_activate_var != NULL)) {
-		dev_add_param(dev, "mode_name", fb_setup_mode, NULL, 0);
-		dev_set_param(dev, "mode_name", info->mode_list[0].name);
-	}
-
-	devfs_create(&info->cdev);
 
 	return 0;
 }
@@ -160,19 +151,52 @@ static void fb_info(struct device_d *dev)
 	printf("\n");
 }
 
-static int fb_probe(struct device_d *hw_dev)
+static struct driver_d fb_driver = {
+	.name  = "fb",
+	.info = fb_info,
+};
+
+static int fb_match(struct device_d *dev, struct driver_d *drv)
 {
 	return 0;
 }
 
-static struct driver_d fb_driver = {
-	.name  = "fb",
+static int fb_probe(struct device_d *dev)
+{
+	struct fb_info *info = dev->priv;
+
+	dev_add_param(dev, "enable", fb_enable_set, NULL, 0);
+	dev_set_param(dev, "enable", "0");
+
+	if (info->num_modes && (info->mode_list != NULL) &&
+			(info->fbops->fb_activate_var != NULL)) {
+		dev_add_param(dev, "mode_name", fb_setup_mode, NULL, 0);
+		dev_set_param(dev, "mode_name", info->mode_list[0].name);
+	}
+
+	return devfs_create(&info->cdev);
+}
+
+static void fb_remove(struct device_d *dev)
+{
+}
+
+struct bus_type fb_bus = {
+	.name = "fb",
+	.match = fb_match,
 	.probe = fb_probe,
-	.info = fb_info,
+	.remove = fb_remove,
 };
+
+static int fb_bus_init(void)
+{
+	return bus_register(&fb_bus);
+}
+pure_initcall(fb_bus_init);
 
 static int fb_init_driver(void)
 {
+	fb_driver.bus = &fb_bus;
 	register_driver(&fb_driver);
 	return 0;
 }

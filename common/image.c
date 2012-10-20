@@ -17,10 +17,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #ifdef __BAREBOX__
@@ -61,6 +57,8 @@ static table_entry_t arch_name[] = {
 	{ IH_ARCH_SPARC64,	"sparc64",	"SPARC 64 Bit",	},
 	{ IH_ARCH_BLACKFIN,	"blackfin",	"Blackfin",	},
 	{ IH_ARCH_AVR32,	"avr32",	"AVR32",	},
+	{ IH_ARCH_NDS32,	"nds32",	"NDS32",	},
+	{ IH_ARCH_OPENRISC,	"or1k",		"OpenRISC 1000",},
 	{ -1,			"",		"",		},
 };
 

@@ -18,10 +18,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  *
  */
 
@@ -137,7 +133,12 @@ struct fec_priv {
 	int rbd_index;				/* next receive BD to read   */
 	struct buffer_descriptor __iomem *tbd_base;	/* TBD ring                  */
 	int tbd_index;				/* next transmit BD to write */
-	struct mii_device miidev;
+	int phy_addr;
+	phy_interface_t interface;
+	u32 phy_flags;
+	struct mii_bus miibus;
+	void (*phy_init)(struct phy_device *dev);
+	struct clk *clk;
 };
 
 /**

@@ -12,7 +12,6 @@
  * functions.
  * @li Call architecture initialization function a_init
  *
- * arch_init_lowlevel is enabled if CONFIG_ARCH_HAS_LOWLEVEL_INIT is defined
  */
 /*
  * (C) Copyright 2006-2008
@@ -29,10 +28,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <config.h>
@@ -41,9 +36,10 @@
 #include <mach/silicon.h>
 #include <mach/wdt.h>
 #include <mach/clocks.h>
+#include <asm/barebox-arm-head.h>
 
-#ifdef CONFIG_ARCH_HAS_LOWLEVEL_INIT
-ENTRY(arch_init_lowlevel)
+#ifdef CONFIG_MACH_DO_LOWLEVEL_INIT
+ENTRY(reset)
 	/* Invalidate all Dcaches */
 #ifndef CONFIG_CPU_V7_DCACHE_SKIP
 	/* If Arch specific ROM code SMI handling does not exist */
@@ -92,9 +88,6 @@ finished_inval:
 	isb
 #endif /* CONFIG_CPU_V7_DCACHE_SKIP */
 	/* back to arch calling code */
-	mov	pc,	lr
-ENDPROC(arch_init_lowlevel)
-
-SRAM_STACK:
-	.word	OMAP_SRAM_STACK
-#endif /* CONFIG_ARCH_HAS_LOWLEVEL_INIT */
+	b board_init_lowlevel_return
+ENDPROC(reset)
+#endif

@@ -11,15 +11,35 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
- * MA 02111-1307 USA
  */
 
 #include <common.h>
 #include <command.h>
 #include <complete.h>
+#include <init.h>
+#include <io.h>
+#include <mach/imx-regs.h>
+
+#define HW_RTC_PERSISTENT1     0x070
+
+static int imx_reset_usb_bootstrap(void)
+{
+	/*
+	 * Clear USB boot mode.
+	 *
+	 * When the i.MX28 boots from USB, the ROM code sets this bit. When
+	 * after a reset the ROM code detects that this bit is set it will
+	 * boot from USB again. This means that if we boot once from USB the
+	 * chip will continue to boot from USB until the next power cycle.
+	 *
+	 * To prevent this (and boot from the configured bootsource instead)
+	 * clear this bit here.
+	 */
+	writel(0x2, IMX_WDT_BASE + HW_RTC_PERSISTENT1 + BIT_CLR);
+
+	return 0;
+}
+device_initcall(imx_reset_usb_bootstrap);
 
 extern void imx_dump_clocks(void);
 
