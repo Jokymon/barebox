@@ -12,6 +12,8 @@ gcc_path = Dir("E:/vm-shared/i386-elf/bin")
 asm = gcc_path.File("i386-elf-gcc.exe")
 gcc = gcc_path.File("i386-elf-gcc.exe")
 ld  = gcc_path.File("i386-elf-ld.exe")
+objcopy = gcc_path.File("i386-elf-objcopy.exe")
+objdump = gcc_path.File("i386-elf-objdump.exe")
 
 env = Environment(
     AS = asm,
@@ -36,6 +38,10 @@ console = Glob('console/*.c')
 
 
 env.Library('libbase', srcs+drivers+console)
-env.Program('minibox', bootfiles, 
+minibox = env.Program('minibox', bootfiles, 
                        LIBS=['libbase'], LIBPATH='.',
                        LINKFLAGS="-T build/barebox.lds")
+
+env.Command('minibox.mbr', minibox, "%s -I elf32-i386 -O binary -j .bootsector $SOURCE $TARGET" % objcopy)
+env.Command('minibox.img', minibox, "%s -I elf32-i386 -O binary $SOURCE $TARGET" % objcopy)
+env.Command('minibox.lst', minibox, "%s -S -mi386 -Maddr16,data16 $SOURCE > $TARGET" % objdump)
