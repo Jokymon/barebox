@@ -20,6 +20,7 @@
 #include <driver.h>
 #include <errno.h>
 #include <init.h>
+#include <linux/kconfig.h>
 
 static int platform_match(struct device_d *dev, struct driver_d *drv)
 {
