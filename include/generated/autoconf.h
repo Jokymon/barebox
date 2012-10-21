@@ -39,3 +39,11 @@
 #define __enabled_CONFIG_DISK_BIOS 1
 
 #define CONFIG_FLEXIBLE_BOOTARGS 1
+
+#define CONFIG_CMD_ECHO_E 0
+#define __enabled_CONFIG_CMD_ECHO_E 0
+#define __enabled_CONFIG_CMD_ECHO_E_MODULE 0
+
+#define CONFIG_OFDEVICE 0
+#define __enabled_CONFIG_OFDEVICE 0
+#define __enabled_CONFIG_OFDEVICE_MODULE 0
